@@ -15,7 +15,6 @@ function generateRoomCode() {
   return Math.random().toString(36).substring(2, 6).toUpperCase();
 }
 
-// Standard Fisher-Yates shuffle engine for initial lock
 function shuffleArray(array) {
   const arr = [...array];
   for (let i = arr.length - 1; i > 0; i--) {
@@ -40,7 +39,6 @@ function cleanDuplicatePlayers(playersArray) {
 io.on('connection', (socket) => {
   console.log(`Player connected: ${socket.id}`);
 
-  // 1. HOST CREATES LOBBY
   socket.on('createRoom', ({ playerName }) => {
     const code = generateRoomCode();
     socket.join(code);
@@ -60,13 +58,13 @@ io.on('connection', (socket) => {
       theNumber: null,
       roles: {},
       gameOverReason: null,
-      failedImposterGuess: null
+      failedImposterGuess: null,
+      tieBreakerActive: false
     };
 
     socket.emit('roomUpdated', rooms[code]);
   });
 
-  // 2. PLAYER JOINS LOBBY
   socket.on('joinRoom', ({ roomCode, playerName }) => {
     const code = roomCode.toUpperCase();
     const room = rooms[code];
@@ -89,7 +87,6 @@ io.on('connection', (socket) => {
     io.to(code).emit('roomUpdated', room);
   });
 
-  // 3. HOST STARTS THE GAME
   socket.on('startGame', ({ roomCode }) => {
     const room = rooms[roomCode];
     if (!room || room.hostId !== socket.id) return;
@@ -101,6 +98,7 @@ io.on('connection', (socket) => {
     room.theNumber = Math.floor(Math.random() * 10) + 1;
     room.gameOverReason = null;
     room.failedImposterGuess = null;
+    room.tieBreakerActive = false;
     
     const imposterIndex = Math.floor(Math.random() * room.players.length);
     const imposterId = room.players[imposterIndex].id;
@@ -117,7 +115,6 @@ io.on('connection', (socket) => {
     io.to(roomCode).emit('goToRoleScreen', room);
   });
 
-  // 4. PLAYER CLICKS "READY"
   socket.on('playerReady', ({ roomCode }) => {
     const room = rooms[roomCode];
     if (!room) return;
@@ -131,14 +128,12 @@ io.on('connection', (socket) => {
       room.phase = 'turnReveal';
       room.readyPlayers = {}; 
       room.turnIndex = 0;
-      
       room.turnOrder = shuffleArray(room.players);
       
       io.to(roomCode).emit('goToTurnRevealScreen', room);
     }
   });
 
-  // HOST PRESSES BEGIN ROUND
   socket.on('startAnswering', ({ roomCode }) => {
     const room = rooms[roomCode];
     if (!room || room.hostId !== socket.id) return;
@@ -152,7 +147,6 @@ io.on('connection', (socket) => {
     });
   });
 
-  // 5. TURN SUBMISSION
   socket.on('submitClue', ({ roomCode, clueWord }) => {
     const room = rooms[roomCode];
     if (!room || room.phase !== 'answer') return;
@@ -187,17 +181,17 @@ io.on('connection', (socket) => {
     }
   });
 
-  // 6. PROCEED TO NEXT PHASE
   socket.on('nextPhase', ({ roomCode, targetPhase }) => {
     const room = rooms[roomCode];
     if (!room || room.hostId !== socket.id) return;
 
     room.players = cleanDuplicatePlayers(room.players);
 
-    if (targetPhase === 'round2') {
-      room.round = 2;
+    // Handles moving into an emergency tie-breaker or round 2 transition
+    if (targetPhase === 'round2' || targetPhase === 'tiebreakerRound') {
+      room.round++;
       room.turnIndex = 0; 
-      room.answers[2] = {};
+      room.answers[room.round] = {};
       room.phase = 'turnReveal';
       io.to(roomCode).emit('goToTurnRevealScreen', room);
     } else if (targetPhase === 'askContinue') {
@@ -210,7 +204,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // ANOTHER ROUND LOBBY CHOICE
   socket.on('submitContinueChoice', ({ roomCode, choice }) => {
     const room = rooms[roomCode];
     if (!room) return;
@@ -242,7 +235,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // 7. VOTE LOGIC
   socket.on('castVote', ({ roomCode, targetPlayerId }) => {
     const room = rooms[roomCode];
     if (!room || room.phase !== 'vote') return;
@@ -253,7 +245,6 @@ io.on('connection', (socket) => {
     room.players = cleanDuplicatePlayers(room.players);
 
     if (Object.keys(room.votes).length >= room.players.length) {
-      room.phase = 'result';
       const tally = {};
       room.players.forEach(p => tally[p.id] = 0);
       Object.values(room.votes).forEach(target => {
@@ -261,8 +252,7 @@ io.on('connection', (socket) => {
       });
       room.voteTally = tally;
 
-      const imposter = room.players.find(p => room.roles[p.id] === 'imposter');
-      let highestVotedId = room.players[0]?.id || socket.id;
+      let highestVotedId = null;
       let maxVotes = -1;
       let tie = false;
 
@@ -276,7 +266,21 @@ io.on('connection', (socket) => {
         }
       });
 
-      if (!tie && imposter && highestVotedId === imposter.id) {
+      // FIXED TIE-BREAKER INTERCEPT BLOCK:
+      if (tie) {
+        room.phase = 'result';
+        room.tieBreakerActive = true; // Alerts frontend to present tie screen layout
+        room.gameOverReason = "🚨 VOTE TIE ENCOUNTERED! Commencing emergency tie-breaker round...";
+        io.to(roomCode).emit('goToResultScreen', room);
+        return;
+      }
+
+      // Normal end of match evaluation (No tie)
+      room.phase = 'result';
+      room.tieBreakerActive = false;
+      const imposter = room.players.find(p => room.roles[p.id] === 'imposter');
+
+      if (imposter && highestVotedId === imposter.id) {
         room.gameOverReason = "Crewmate Victory! The Imposter was executed!";
       } else {
         room.gameOverReason = "Imposter Victory! The Crew failed to vote them out!";
@@ -286,7 +290,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // IMPOSTER REVELATION ACTION
   socket.on('imposterGuessNumber', ({ roomCode, guessedNumber }) => {
     const room = rooms[roomCode];
     if (!room) return;
@@ -295,6 +298,7 @@ io.on('connection', (socket) => {
 
     const parsedGuess = parseInt(guessedNumber);
     room.phase = 'result';
+    room.tieBreakerActive = false;
     
     const tally = {};
     room.players.forEach(p => tally[p.id] = 0);
@@ -310,7 +314,6 @@ io.on('connection', (socket) => {
     io.to(roomCode).emit('goToResultScreen', room);
   });
 
-  // RESET GAME ENGINE
   socket.on('resetGame', ({ roomCode }) => {
     const room = rooms[roomCode];
     if (!room || room.hostId !== socket.id) return;
@@ -327,6 +330,7 @@ io.on('connection', (socket) => {
     room.turnIndex = 0;
     room.gameOverReason = null;
     room.failedImposterGuess = null;
+    room.tieBreakerActive = false;
 
     io.to(roomCode).emit('roomUpdated', room);
   });
@@ -338,5 +342,5 @@ io.on('connection', (socket) => {
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-  console.log(`Server running with locked order configurations! 🔒`);
+  console.log(`Server running with tie-breaker systems! 🚨`);
 });
