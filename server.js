@@ -15,6 +15,7 @@ function generateRoomCode() {
   return Math.random().toString(36).substring(2, 6).toUpperCase();
 }
 
+// Fixed & robust array shuffler to ensure random turn orders
 function shuffleArray(array) {
   const arr = [...array];
   for (let i = arr.length - 1; i > 0; i--) {
@@ -47,7 +48,7 @@ io.on('connection', (socket) => {
       theNumber: null,
       roles: {},
       gameOverReason: null,
-      failedImposterGuess: null // Tracks wrong guess string to show everyone
+      failedImposterGuess: null
     };
 
     socket.emit('roomUpdated', rooms[code]);
@@ -110,6 +111,8 @@ io.on('connection', (socket) => {
       room.phase = 'answer';
       room.readyPlayers = {}; 
       room.turnIndex = 0;
+      
+      // Force Randomize Turn Order right here
       room.turnOrder = shuffleArray(room.players);
       
       io.to(roomCode).emit('goToAnswerScreen', room);
@@ -125,14 +128,17 @@ io.on('connection', (socket) => {
     const room = rooms[roomCode];
     if (!room || room.phase !== 'answer') return;
 
+    // STRICT SAFETY CHECK: Verify it is actually this player's turn to stop double clicks
     const currentExpectedPlayer = room.turnOrder[room.turnIndex];
-    if (socket.id !== currentExpectedPlayer.id) return; 
+    if (!currentExpectedPlayer || socket.id !== currentExpectedPlayer.id) return; 
 
     if (!room.answers[room.round]) {
       room.answers[room.round] = {};
     }
 
+    // Save clue
     room.answers[room.round][socket.id] = clueWord;
+    
     io.to(roomCode).emit('clueRevealedLive', {
       playerId: socket.id,
       playerName: currentExpectedPlayer.name,
@@ -140,6 +146,7 @@ io.on('connection', (socket) => {
       roundAnswers: room.answers[room.round]
     });
 
+    // Move to next turn
     room.turnIndex++;
 
     if (room.turnIndex < room.turnOrder.length) {
@@ -161,7 +168,7 @@ io.on('connection', (socket) => {
       room.round = 2;
       room.turnIndex = 0;
       room.answers[2] = {};
-      room.turnOrder = shuffleArray(room.players);
+      room.turnOrder = shuffleArray(room.players); // Randomize starting turns again for round 2
       io.to(roomCode).emit('goToAnswerScreen', room);
       io.to(roomCode).emit('nextTurnIndex', { 
         activePlayerId: room.turnOrder[room.turnIndex].id, 
@@ -197,7 +204,7 @@ io.on('connection', (socket) => {
         room.round++;
         room.turnIndex = 0;
         room.answers[room.round] = {};
-        room.turnOrder = shuffleArray(room.players);
+        room.turnOrder = shuffleArray(room.players); // Randomize layout
         io.to(roomCode).emit('goToAnswerScreen', room);
         io.to(roomCode).emit('nextTurnIndex', { 
           activePlayerId: room.turnOrder[room.turnIndex].id, 
@@ -253,7 +260,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  // 🚨 HIGH STAKES HACK LINK: CORRECT GUESS = WIN, WRONG GUESS = INSTANT LOSS
+  // 🚨 HIGH STAKES HACK LINK
   socket.on('imposterGuessNumber', ({ roomCode, guessedNumber }) => {
     const room = rooms[roomCode];
     if (!room) return;
@@ -263,7 +270,6 @@ io.on('connection', (socket) => {
     const parsedGuess = parseInt(guessedNumber);
     room.phase = 'result';
     
-    // Default mock a baseline tally so empty layout arrays don't break map blocks
     const tally = {};
     room.players.forEach(p => tally[p.id] = 0);
     room.voteTally = tally;
@@ -271,7 +277,7 @@ io.on('connection', (socket) => {
     if (parsedGuess === room.theNumber) {
       room.gameOverReason = "💥 IMPOSTER VICTORY! They successfully guessed the Secret Number!";
     } else {
-      room.failedImposterGuess = parsedGuess; // Log the failure to broadcast
+      room.failedImposterGuess = parsedGuess;
       room.gameOverReason = "💀 CREWMATE VICTORY! The Imposter made an incorrect guess and blew their cover!";
     }
 
@@ -306,5 +312,5 @@ io.on('connection', (socket) => {
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-  console.log(`Server running live with Shuffled Starts & Sudden Death Guesses! 🔥`);
+  console.log(`Server running live with Shuffled Starts & Double-Click Protections! 🔥`);
 });
