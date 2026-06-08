@@ -75,7 +75,7 @@ io.on('connection', (socket) => {
       tieBreakerActive: false,
       failedImposterGuess: null,
       gameOverReason: "",
-      messages: [] // Chat history for this room
+      messages: []
     };
 
     socket.join(roomCode);
@@ -108,7 +108,6 @@ io.on('connection', (socket) => {
     const chatMsg = { sender: playerName, text: message };
     room.messages.push(chatMsg);
 
-    // Keep only last 50 messages to save memory
     if (room.messages.length > 50) room.messages.shift();
 
     io.to(code).emit('chatMessageReceived', chatMsg);
@@ -153,7 +152,7 @@ io.on('connection', (socket) => {
     const allReady = room.players.every(p => room.readyPlayers[p.id]);
     if (allReady) {
       room.phase = 'turnReveal';
-      // Locks the initial turn order here for Round 1
+      // Locks the turn order in Round 1
       room.turnOrder = shuffleArray(room.players);
       io.to(room.code).emit('goToTurnRevealScreen', room);
     }
@@ -217,7 +216,7 @@ io.on('connection', (socket) => {
 
     if (targetPhase === 'round2') {
       room.round = 2;
-      // FIX: Removed shuffleArray. Reuses the exact same turnOrder array as Round 1.
+      // Reuses the exact same turn order array as Round 1
       io.to(room.code).emit('goToTurnRevealScreen', room);
     } 
     else if (targetPhase === 'askContinue') {
@@ -231,7 +230,6 @@ io.on('connection', (socket) => {
     else if (targetPhase === 'tiebreakerRound') {
       room.tieBreakerActive = true;
       room.round++;
-      // FIX: Removed shuffleArray. Retains turn order for tiebreakers.
       io.to(room.code).emit('goToTurnRevealScreen', room);
     }
   });
@@ -255,7 +253,6 @@ io.on('connection', (socket) => {
 
       if (moreCount >= voteCount) {
         room.round++;
-        // FIX: Removed shuffleArray so turn order is maintained in extended rounds.
         io.to(room.code).emit('goToTurnRevealScreen', room);
       } else {
         room.votes = {};
@@ -297,16 +294,16 @@ io.on('connection', (socket) => {
 
       if (highestVotedPlayers.length > 1) {
         room.tieBreakerActive = true;
-        room.gameOverReason = "VOTING TIE! The group could not reach a consensus.";
+        room.gameOverReason = "It's a tie!";
         io.to(room.code).emit('goToResultScreen', room);
       } else {
         const exiledId = highestVotedPlayers[0];
         room.tieBreakerActive = false;
 
         if (room.roles[exiledId] === 'imposter') {
-          room.gameOverReason = "VICTORY! The Crewmates successfully voted out the Imposter!";
+          room.gameOverReason = "Crewmates Win! The Imposter was voted out.";
         } else {
-          room.gameOverReason = "DEFEAT! An innocent Crewmate was exiled. The Imposter wins!";
+          room.gameOverReason = "Imposter Wins! A crewmate was voted out.";
         }
         io.to(room.code).emit('goToResultScreen', room);
       }
@@ -321,10 +318,10 @@ io.on('connection', (socket) => {
 
     room.tieBreakerActive = false;
     if (parseInt(guessedNumber) === parseInt(room.theNumber)) {
-      room.gameOverReason = "IMPOSTER VICTORY! The Imposter cracked the secret number code!";
+      room.gameOverReason = "Imposter Wins! They guessed the number.";
     } else {
       room.failedImposterGuess = guessedNumber;
-      room.gameOverReason = "CREWMATE VICTORY! The Imposter made a blind guess and blew their cover!";
+      room.gameOverReason = "Crewmates Win! The Imposter guessed wrong.";
     }
     io.to(room.code).emit('goToResultScreen', room);
   });
@@ -347,7 +344,7 @@ io.on('connection', (socket) => {
     room.tieBreakerActive = false;
     room.failedImposterGuess = null;
     room.gameOverReason = "";
-    room.messages = []; // Clear chat on reset
+    room.messages = [];
 
     io.to(room.code).emit('roomUpdated', room);
   });
