@@ -15,7 +15,7 @@ function generateRoomCode() {
   return Math.random().toString(36).substring(2, 6).toUpperCase();
 }
 
-// Standard Fisher-Yates shuffle used ONLY for the initial Round 1 lineup
+// Standard Fisher-Yates shuffle engine for initial lock
 function shuffleArray(array) {
   const arr = [...array];
   for (let i = arr.length - 1; i > 0; i--) {
@@ -117,7 +117,7 @@ io.on('connection', (socket) => {
     io.to(roomCode).emit('goToRoleScreen', room);
   });
 
-  // 4. PLAYER CLICKS "READY" -> Generates the core lineup order
+  // 4. PLAYER CLICKS "READY"
   socket.on('playerReady', ({ roomCode }) => {
     const room = rooms[roomCode];
     if (!room) return;
@@ -132,14 +132,13 @@ io.on('connection', (socket) => {
       room.readyPlayers = {}; 
       room.turnIndex = 0;
       
-      // Order is locked here randomly once!
       room.turnOrder = shuffleArray(room.players);
       
       io.to(roomCode).emit('goToTurnRevealScreen', room);
     }
   });
 
-  // HOST PRESSES START CLUES BUTTON
+  // HOST PRESSES BEGIN ROUND
   socket.on('startAnswering', ({ roomCode }) => {
     const room = rooms[roomCode];
     if (!room || room.hostId !== socket.id) return;
@@ -153,7 +152,7 @@ io.on('connection', (socket) => {
     });
   });
 
-  // 5. TURN BY TURN SUBMISSION
+  // 5. TURN SUBMISSION
   socket.on('submitClue', ({ roomCode, clueWord }) => {
     const room = rooms[roomCode];
     if (!room || room.phase !== 'answer') return;
@@ -197,10 +196,9 @@ io.on('connection', (socket) => {
 
     if (targetPhase === 'round2') {
       room.round = 2;
-      room.turnIndex = 0; // Reset index back to Player 1
+      room.turnIndex = 0; 
       room.answers[2] = {};
       room.phase = 'turnReveal';
-      // FIXED: Shuffling line removed here to lock original order
       io.to(roomCode).emit('goToTurnRevealScreen', room);
     } else if (targetPhase === 'askContinue') {
       room.continueVotes = {};
@@ -212,7 +210,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  // LOBBY CONSENSUS FOR MORE ROUNDS
+  // ANOTHER ROUND LOBBY CHOICE
   socket.on('submitContinueChoice', ({ roomCode, choice }) => {
     const room = rooms[roomCode];
     if (!room) return;
@@ -232,10 +230,9 @@ io.on('connection', (socket) => {
 
       if (moreCount >= voteCount) {
         room.round++;
-        room.turnIndex = 0; // Reset index back to Player 1
+        room.turnIndex = 0; 
         room.answers[room.round] = {};
         room.phase = 'turnReveal';
-        // FIXED: Shuffling line removed here to lock original order
         io.to(roomCode).emit('goToTurnRevealScreen', room);
       } else {
         room.phase = 'vote';
@@ -289,7 +286,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  // IMPOSTER EMERGENCY GUESS
+  // IMPOSTER REVELATION ACTION
   socket.on('imposterGuessNumber', ({ roomCode, guessedNumber }) => {
     const room = rooms[roomCode];
     if (!room) return;
@@ -304,7 +301,7 @@ io.on('connection', (socket) => {
     room.voteTally = tally;
 
     if (parsedGuess === room.theNumber) {
-      room.gameOverReason = "💥 IMPOSTER VICTORY! They successfully guessed the Secret Number!";
+      room.gameOverReason = "IMPOSTER VICTORY! They successfully guessed the Number!";
     } else {
       room.failedImposterGuess = parsedGuess;
       room.gameOverReason = "💀 CREWMATE VICTORY! The Imposter made an incorrect guess and blew their cover!";
@@ -313,7 +310,7 @@ io.on('connection', (socket) => {
     io.to(roomCode).emit('goToResultScreen', room);
   });
 
-  // RESET
+  // RESET GAME ENGINE
   socket.on('resetGame', ({ roomCode }) => {
     const room = rooms[roomCode];
     if (!room || room.hostId !== socket.id) return;
@@ -341,5 +338,5 @@ io.on('connection', (socket) => {
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-  console.log(`Server running with fixed permanent order lineup engine! 🔒`);
+  console.log(`Server running with locked order configurations! 🔒`);
 });
