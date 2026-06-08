@@ -67,6 +67,9 @@ io.on('connection', (socket) => {
       return;
     }
 
+    // Clean up any existing dead connections with the exact same name or ID first
+    room.players = room.players.filter(p => p.id !== socket.id && p.name !== playerName);
+
     socket.join(code);
     room.players.push({ id: socket.id, name: playerName });
     io.to(code).emit('roomUpdated', room);
@@ -106,12 +109,18 @@ io.on('connection', (socket) => {
     room.readyPlayers[socket.id] = true;
     io.to(roomCode).emit('readyListUpdated', room.readyPlayers);
 
-    if (Object.keys(room.readyPlayers).length === room.players.length) {
+    // Check readiness against unique players only
+    const uniquePlayersMap = {};
+    room.players.forEach(p => { uniquePlayersMap[p.id] = p; });
+    const uniquePlayersList = Object.values(uniquePlayersMap);
+
+    if (Object.keys(room.readyPlayers).length >= uniquePlayersList.length) {
       room.phase = 'turnReveal';
       room.readyPlayers = {}; 
       room.turnIndex = 0;
       
-      room.turnOrder = shuffleArray(room.players);
+      // CRITICAL HARDCODE: Shuffle ONLY the unique list of filtered players
+      room.turnOrder = shuffleArray(uniquePlayersList);
       
       io.to(roomCode).emit('goToTurnRevealScreen', room);
     }
@@ -130,27 +139,22 @@ io.on('connection', (socket) => {
     });
   });
 
-  // 5. PLAYER SUBMITS WORD CLUE (HARDCODED SINGLE ANSWER PER ROUND PROTECTION)
+  // 5. PLAYER SUBMITS WORD CLUE
   socket.on('submitClue', ({ roomCode, clueWord }) => {
     const room = rooms[roomCode];
     if (!room || room.phase !== 'answer') return;
 
-    // Check if this round's answer tracking object exists
     if (!room.answers[room.round]) {
       room.answers[room.round] = {};
     }
 
-    // CRITICAL HARDCODED GUARD: If player has already answered this round, reject completely
     if (room.answers[room.round][socket.id] !== undefined) {
-      console.log(`Blocked duplicate submission attempt from player: ${socket.id}`);
-      return;
+      return; // Stop duplicate inputs
     }
 
-    // Verify it is actually this player's turned based on index assignment
     const currentExpectedPlayer = room.turnOrder[room.turnIndex];
     if (!currentExpectedPlayer || socket.id !== currentExpectedPlayer.id) return; 
 
-    // Lock in the answer permanently for this round
     room.answers[room.round][socket.id] = clueWord;
     
     io.to(roomCode).emit('clueRevealedLive', {
@@ -160,7 +164,6 @@ io.on('connection', (socket) => {
       roundAnswers: room.answers[room.round]
     });
 
-    // Advance turn sequence safely
     room.turnIndex++;
 
     if (room.turnIndex < room.turnOrder.length) {
@@ -178,12 +181,17 @@ io.on('connection', (socket) => {
     const room = rooms[roomCode];
     if (!room || room.hostId !== socket.id) return;
 
+    // Filter unique array tracking structures
+    const uniquePlayersMap = {};
+    room.players.forEach(p => { uniquePlayersMap[p.id] = p; });
+    const uniquePlayersList = Object.values(uniquePlayersMap);
+
     if (targetPhase === 'round2') {
       room.round = 2;
       room.turnIndex = 0;
       room.answers[2] = {};
       room.phase = 'turnReveal';
-      room.turnOrder = shuffleArray(room.players);
+      room.turnOrder = shuffleArray(uniquePlayersList);
       io.to(roomCode).emit('goToTurnRevealScreen', room);
     } else if (targetPhase === 'askContinue') {
       room.continueVotes = {};
@@ -203,7 +211,11 @@ io.on('connection', (socket) => {
     room.continueVotes[socket.id] = choice;
     io.to(roomCode).emit('continueStatusUpdated', room.continueVotes);
 
-    if (Object.keys(room.continueVotes).length === room.players.length) {
+    const uniquePlayersMap = {};
+    room.players.forEach(p => { uniquePlayersMap[p.id] = p; });
+    const uniquePlayersList = Object.values(uniquePlayersMap);
+
+    if (Object.keys(room.continueVotes).length >= uniquePlayersList.length) {
       let moreCount = 0;
       let voteCount = 0;
       Object.values(room.continueVotes).forEach(v => {
@@ -216,7 +228,7 @@ io.on('connection', (socket) => {
         room.turnIndex = 0;
         room.answers[room.round] = {};
         room.phase = 'turnReveal';
-        room.turnOrder = shuffleArray(room.players);
+        room.turnOrder = shuffleArray(uniquePlayersList);
         io.to(roomCode).emit('goToTurnRevealScreen', room);
       } else {
         room.phase = 'vote';
@@ -234,17 +246,21 @@ io.on('connection', (socket) => {
     room.votes[socket.id] = targetPlayerId;
     io.to(roomCode).emit('voteStatusUpdated', room.votes);
 
-    if (Object.keys(room.votes).length === room.players.length) {
+    const uniquePlayersMap = {};
+    room.players.forEach(p => { uniquePlayersMap[p.id] = p; });
+    const uniquePlayersList = Object.values(uniquePlayersMap);
+
+    if (Object.keys(room.votes).length >= uniquePlayersList.length) {
       room.phase = 'result';
       const tally = {};
-      room.players.forEach(p => tally[p.id] = 0);
+      uniquePlayersList.forEach(p => tally[p.id] = 0);
       Object.values(room.votes).forEach(target => {
         if (tally[target] !== undefined) tally[target]++;
       });
       room.voteTally = tally;
 
-      const imposter = room.players.find(p => room.roles[p.id] === 'imposter');
-      let highestVotedId = room.players[0].id;
+      const imposter = uniquePlayersList.find(p => room.roles[p.id] === 'imposter');
+      let highestVotedId = uniquePlayersList[0]?.id || socket.id;
       let maxVotes = -1;
       let tie = false;
 
@@ -258,7 +274,7 @@ io.on('connection', (socket) => {
         }
       });
 
-      if (!tie && highestVotedId === imposter.id) {
+      if (!tie && imposter && highestVotedId === imposter.id) {
         room.gameOverReason = "Crewmate Victory! The Imposter was executed!";
       } else {
         room.gameOverReason = "Imposter Victory! The Crew failed to vote them out!";
@@ -315,10 +331,11 @@ io.on('connection', (socket) => {
 
   socket.on('disconnect', () => {
     console.log(`Player disconnected: ${socket.id}`);
+    // Optional: Clean empty rooms here if needed
   });
 });
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-  console.log(`Server running live with hardcoded round submission constraints! 🔥`);
+  console.log(`Server live with absolute deduplicated turn-lineup validation! 🔥`);
 });
