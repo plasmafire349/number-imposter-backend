@@ -15,16 +15,20 @@ function generateRoomCode() {
   return Math.random().toString(36).substring(2, 6).toUpperCase();
 }
 
+// FIXED: Standard, uncorrupted Fisher-Yates shuffle
 function shuffleArray(array) {
   const arr = [...array];
   for (let i = arr.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
-    [arr[i], arr[arr[j]]] = [arr[j], arr[i]];
+    // Correct index swapping swaps array elements cleanly
+    const temp = arr[i];
+    arr[i] = arr[j];
+    arr[j] = temp;
   }
   return arr;
 }
 
-// Helper function to force unique players by ID
+// Strict helper to guarantee no ghost duplicates exist in the roster
 function cleanDuplicatePlayers(playersArray) {
   const uniqueMap = {};
   playersArray.forEach(p => {
@@ -64,7 +68,7 @@ io.on('connection', (socket) => {
     socket.emit('roomUpdated', rooms[code]);
   });
 
-  // 2. PLAYER JOINS LOBBY (FIXED ANTI-DUPLICATION FILTER)
+  // 2. PLAYER JOINS LOBBY
   socket.on('joinRoom', ({ roomCode, playerName }) => {
     const code = roomCode.toUpperCase();
     const room = rooms[code];
@@ -78,13 +82,11 @@ io.on('connection', (socket) => {
       return;
     }
 
-    // Strip out any pre-existing ghost connections with this socket ID or player name first
+    // Erase any dead duplicate connections instantly
     room.players = room.players.filter(p => p.id !== socket.id && p.name !== playerName);
 
     socket.join(code);
     room.players.push({ id: socket.id, name: playerName });
-    
-    // Clean array structural state completely before broadcasting
     room.players = cleanDuplicatePlayers(room.players);
     
     io.to(code).emit('roomUpdated', room);
@@ -118,7 +120,7 @@ io.on('connection', (socket) => {
     io.to(roomCode).emit('goToRoleScreen', room);
   });
 
-  // 4. PLAYER CLICKS "READY"
+  // 4. PLAYER CLICKS "READY" -> Renders Lineup Page
   socket.on('playerReady', ({ roomCode }) => {
     const room = rooms[roomCode];
     if (!room) return;
@@ -133,27 +135,29 @@ io.on('connection', (socket) => {
       room.readyPlayers = {}; 
       room.turnIndex = 0;
       
-      // Shuffle the fully distinct array list
+      // Shuffle distinct players array safely using the fixed algorithm
       room.turnOrder = shuffleArray(room.players);
       
       io.to(roomCode).emit('goToTurnRevealScreen', room);
     }
   });
 
-  // HOST PROCEEDS FROM REVEAL TO ACTUAL INPUT
+  // HOST PRESSES START CLUES BUTTON
   socket.on('startAnswering', ({ roomCode }) => {
     const room = rooms[roomCode];
     if (!room || room.hostId !== socket.id) return;
 
     room.phase = 'answer';
     io.to(roomCode).emit('goToAnswerScreen', room);
+    
+    // Call out Player 1 (Index 0)
     io.to(roomCode).emit('nextTurnIndex', { 
       activePlayerId: room.turnOrder[room.turnIndex].id, 
       activePlayerName: room.turnOrder[room.turnIndex].name 
     });
   });
 
-  // 5. PLAYER SUBMITS WORD CLUE
+  // 5. TURN BY TURN SUBMISSION (Player 1 -> Player 2 -> Player 3)
   socket.on('submitClue', ({ roomCode, clueWord }) => {
     const room = rooms[roomCode];
     if (!room || room.phase !== 'answer') return;
@@ -162,10 +166,10 @@ io.on('connection', (socket) => {
       room.answers[room.round] = {};
     }
 
-    if (room.answers[room.round][socket.id] !== undefined) {
-      return; 
-    }
+    // Hardcoded stop block to eliminate double submissions
+    if (room.answers[room.round][socket.id] !== undefined) return; 
 
+    // Verification check: Is it actually this player's exact sequence slot?
     const currentExpectedPlayer = room.turnOrder[room.turnIndex];
     if (!currentExpectedPlayer || socket.id !== currentExpectedPlayer.id) return; 
 
@@ -178,14 +182,17 @@ io.on('connection', (socket) => {
       roundAnswers: room.answers[room.round]
     });
 
+    // Move to next player in numerical line
     room.turnIndex++;
 
     if (room.turnIndex < room.turnOrder.length) {
+      // Prompt Player 2, then Player 3...
       io.to(roomCode).emit('nextTurnIndex', { 
         activePlayerId: room.turnOrder[room.turnIndex].id, 
         activePlayerName: room.turnOrder[room.turnIndex].name 
       });
     } else {
+      // Everyone has gone exactly once
       io.to(roomCode).emit('showAllClues', room);
     }
   });
@@ -214,7 +221,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  // 6b. LOBBY CONSENSUS FOR MORE ROUNDS
+  // LOBBY CONSENSUS FOR MORE ROUNDS
   socket.on('submitContinueChoice', ({ roomCode, choice }) => {
     const room = rooms[roomCode];
     if (!room) return;
@@ -343,5 +350,5 @@ io.on('connection', (socket) => {
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-  console.log(`Server live with absolute array level deduplication! 🔥`);
+  console.log(`Server running with fixed Fisher-Yates shuffle order engine! 🔥`);
 });
