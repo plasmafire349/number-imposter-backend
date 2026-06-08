@@ -9,11 +9,10 @@ const io = new Server(server);
 
 const PORT = process.env.PORT || 3000;
 
-// 🌟 FIX: This line forces the server to look inside its own folder 
-// to automatically serve 'number-imposter.html' and all project assets!
+// Force the server to look inside its own folder for your game assets
 app.use(express.static(__dirname));
 
-// Also serve the root path directly to your HTML game file
+// 🌟 FIXED LINE: This points the homepage directly to your original file name!
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'number-imposter.html'));
 });
