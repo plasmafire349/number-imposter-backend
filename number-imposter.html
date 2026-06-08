@@ -1,714 +1,559 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Number Imposter</title>
-<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
-
-<style>
-  :root {
-    --bg: #0d0b1a;
-    --surface: #16122b;
-    --surface2: #1f1940;
-    --purple-deep: #2d1f6e;
-    --purple-mid: #5b3dd4;
-    --purple-bright: #8b5cf6;
-    --purple-glow: #a78bfa;
-    --purple-pale: #c4b5fd;
-    --accent: #e879f9;
-    --accent2: #f0abfc;
-    --text: #f3f0ff;
-    --text-dim: #9ca3af;
-    --imposter: #f43f5e;
-    --crewmate: #10b981;
-    --warn: #f59e0b;
-    --radius: 14px;
-    --glow: 0 0 40px rgba(139,92,246,0.35);
-  }
-
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-
-  body {
-    font-family: 'Space Mono', monospace;
-    background: var(--bg);
-    color: var(--text);
-    min-height: 100vh;
-    overflow-x: hidden;
-    position: relative;
-    padding-bottom: 120px;
-  }
-
-  body::before {
-    content: '';
-    position: fixed;
-    inset: 0;
-    background:
-      radial-gradient(ellipse 60% 40% at 20% 20%, rgba(91,61,212,0.18) 0%, transparent 60%),
-      radial-gradient(ellipse 50% 50% at 80% 80%, rgba(232,121,249,0.12) 0%, transparent 55%),
-      radial-gradient(ellipse 40% 30% at 60% 10%, rgba(139,92,246,0.10) 0%, transparent 50%);
-    pointer-events: none;
-    z-index: 0;
-  }
-
-  .stars { position: fixed; inset: 0; pointer-events: none; z-index: 0; overflow: hidden; }
-  .star { position: absolute; background: white; border-radius: 50%; animation: twinkle var(--d, 3s) infinite var(--delay, 0s) ease-in-out; opacity: 0; }
-  @keyframes twinkle { 0%, 100% { opacity: 0; } 50% { opacity: var(--op, 0.6); } }
-
-  #app { position: relative; z-index: 1; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; }
-  .screen { display: none; width: 100%; max-width: 680px; animation: fadeIn 0.4s ease; }
-  .screen.active { display: block; }
-  @keyframes fadeIn { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
-
-  .logo { font-family: 'Syne', sans-serif; font-weight: 800; font-size: clamp(2.2rem, 7vw, 3.6rem); text-align: center; letter-spacing: -1px; background: linear-gradient(135deg, var(--purple-pale), var(--accent), var(--purple-bright)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; margin-bottom: 6px; filter: drop-shadow(0 0 24px rgba(167,139,250,0.4)); }
-  .logo-sub { text-align: center; color: var(--text-dim); font-size: 0.75rem; letter-spacing: 4px; text-transform: uppercase; margin-bottom: 36px; }
-
-  .card { background: var(--surface); border: 1px solid rgba(139,92,246,0.22); border-radius: var(--radius); padding: 28px; margin-bottom: 16px; box-shadow: var(--glow), inset 0 1px 0 rgba(255,255,255,0.05); }
-  .card-title { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 1.1rem; color: var(--purple-pale); margin-bottom: 18px; display: flex; align-items: center; gap: 10px; }
-  .card-title .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--purple-bright); box-shadow: 0 0 8px var(--purple-bright); }
-
-  .hud-badge { display: none; background: rgba(16,185,129,0.15); border: 1px solid var(--crewmate); border-radius: 8px; padding: 10px 16px; font-family: 'Syne', sans-serif; font-weight: 700; text-align: center; font-size: 1.1rem; color: var(--crewmate); margin-bottom: 16px; width: 100%; box-shadow: 0 0 15px rgba(16,185,129,0.2); }
-
-  input[type="text"], input[type="number"] { width: 100%; background: var(--surface2); border: 1px solid rgba(139,92,246,0.3); border-radius: 8px; padding: 12px 16px; color: var(--text); font-family: 'Space Mono', monospace; font-size: 0.9rem; outline: none; transition: border-color 0.2s, box-shadow 0.2s; }
-  input[type="text"]:focus, input[type="number"]:focus { border-color: var(--purple-bright); box-shadow: 0 0 0 3px rgba(139,92,246,0.2); }
-
-  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 24px; border-radius: 8px; border: none; font-family: 'Space Mono', monospace; font-size: 0.85rem; font-weight: 700; cursor: pointer; transition: all 0.18s; letter-spacing: 0.5px; }
-  .btn-primary { background: linear-gradient(135deg, var(--purple-mid), var(--accent)); color: white; box-shadow: 0 4px 20px rgba(139,92,246,0.4); }
-  .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 28px rgba(139,92,246,0.55); }
-  .btn-secondary { background: var(--surface2); color: var(--purple-pale); border: 1px solid rgba(139,92,246,0.3); }
-  .btn-danger { background: linear-gradient(135deg, #7f1d1d, var(--imposter)); color: white; box-shadow: 0 4px 18px rgba(244,63,94,0.35); }
-  .btn-danger:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(244,63,94,0.5); }
-  .btn-full { width: 100%; }
-  .btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none !important; }
-
-  .player-list { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
-  .player-item { display: flex; align-items: center; justify-content: space-between; background: var(--surface2); border: 1px solid rgba(139,92,246,0.15); border-radius: 8px; padding: 10px 14px; font-size: 0.85rem; }
-  .status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--crewmate); box-shadow: 0 0 6px var(--crewmate); }
-
-  .role-card { border-radius: var(--radius); padding: 40px 28px; text-align: center; margin-bottom: 20px; border: 2px solid rgba(16,185,129,0.4); }
-  .role-card.crewmate { background: linear-gradient(135deg, rgba(16,185,129,0.12), rgba(5,150,105,0.06)); border-color: rgba(16,185,129,0.4); }
-  .role-card.imposter { background: linear-gradient(135deg, rgba(244,63,94,0.14), rgba(190,18,60,0.07)); border-color: rgba(244,63,94,0.45); }
-  .role-label { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 2.2rem; letter-spacing: -1px; margin-bottom: 8px; }
-  .role-label.crewmate { color: var(--crewmate); text-shadow: 0 0 20px rgba(16,185,129,0.5); }
-  .role-label.imposter { color: var(--imposter); text-shadow: 0 0 20px rgba(244,63,94,0.5); }
-  
-  .role-number { margin-top: 18px; display: inline-block; background: rgba(139,92,246,0.2); border: 1px solid rgba(139,92,246,0.4); border-radius: 6px; padding: 8px 20px; font-family: 'Syne', sans-serif; font-weight: 700; font-size: 1.5rem; color: var(--purple-pale); }
-  .role-number.imposter-text { color: var(--imposter); border-color: rgba(244,63,94,0.4); background: rgba(244,63,94,0.15); font-size: 1.1rem; }
-
-  .turn-banner { background: rgba(139,92,246,0.15); border: 1px solid var(--purple-bright); border-radius: 8px; padding: 12px; font-family: 'Syne', sans-serif; font-weight: 700; text-align: center; color: var(--accent2); margin-bottom: 16px; }
-
-  .order-item { display: flex; align-items: center; background: var(--surface2); border: 1px solid rgba(139,92,246,0.2); border-radius: 8px; padding: 14px 18px; font-weight: 700; gap: 14px; }
-  .order-badge { background: var(--purple-mid); color: white; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.85rem; font-family: 'Syne', sans-serif; }
-  .order-name { font-size: 0.95rem; }
-
-  .answers-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; margin-top: 14px; }
-  .answer-card { background: var(--surface2); border: 1px solid rgba(139,92,246,0.2); border-radius: 10px; padding: 14px; }
-  .answer-card.newly-added { border-color: var(--accent); transform: scale(1.02); box-shadow: 0 0 15px rgba(232,121,249,0.3); }
-  .answer-player { font-size: 0.7rem; color: var(--text-dim); margin-bottom: 6px; }
-  .answer-text { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 1.2rem; color: var(--accent); word-break: break-all; }
-
-  .vote-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; margin-top: 14px; }
-  .vote-btn { background: var(--surface2); border: 2px solid rgba(139,92,246,0.2); border-radius: 10px; padding: 16px 12px; text-align: center; cursor: pointer; color: var(--text); }
-  .vote-btn.selected { border-color: var(--accent); background: rgba(232,121,249,0.12); }
-  .vote-btn.disabled { opacity: 0.3; cursor: default; }
-  .vote-name { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 0.95rem; margin-top: 6px; }
-
-  .vote-results { margin-top: 20px; display: flex; flex-direction: column; gap: 8px; }
-  .vote-bar { display: flex; align-items: center; gap: 12px; background: var(--surface2); border-radius: 8px; padding: 10px 14px; }
-  .vote-bar-name { min-width: 100px; font-size: 0.8rem; }
-  .vote-bar-track { flex: 1; height: 6px; background: rgba(139,92,246,0.15); border-radius: 3px; overflow: hidden; }
-  .vote-bar-fill { height: 100%; background: linear-gradient(90deg, var(--purple-mid), var(--accent)); }
-  .vote-bar-count { font-size: 0.75rem; color: var(--text-dim); }
-
-  .imposter-shortcut-bar {
-    position: fixed;
-    bottom: 0; left: 0; right: 0;
-    background: linear-gradient(0deg, #1f0813 0%, #11050b 100%);
-    border-top: 2px solid var(--imposter);
-    padding: 16px 24px;
-    z-index: 999;
-    box-shadow: 0 -10px 30px rgba(244,63,94,0.2);
-    display: none;
-    align-items: center;
-    justify-content: center;
-    gap: 16px;
-  }
-  .imposter-shortcut-bar p { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 0.85rem; color: var(--imposter); letter-spacing: 1px; text-transform: uppercase; text-shadow: 0 0 10px var(--imposter); }
-  .imposter-shortcut-bar input { width: 140px; border-color: rgba(244,63,94,0.4); text-align: center; font-weight: 700; color: var(--imposter); }
-  .imposter-shortcut-bar input:focus { border-color: var(--imposter); box-shadow: 0 0 0 3px rgba(244,63,94,0.2); }
-
-  .flex-row { display: flex; gap: 10px; }
-  .flex-row .btn { flex: 1; }
-  .text-center { text-align: center; }
-  .mt-12 { margin-top: 12px; }
-  .mt-16 { margin-top: 16px; }
-  .mt-20 { margin-top: 20px; }
-  .mb-8 { margin-bottom: 8px; }
-  .player-answered { color: var(--crewmate); font-size: 0.75rem; }
-  .player-waiting { color: var(--warn); font-size: 0.75rem; }
-  .guess-reveal-badge { background: rgba(244,63,94,0.15); border: 1px dashed var(--imposter); padding: 10px; border-radius: 8px; color: var(--imposter); font-size: 0.85rem; margin-top: 14px; }
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Number Imposter</title>
+  <script src="/socket.io/socket.io.js"></script>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #1e1e2f, #252542);
+      color: #fff;
+      margin: 0;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+    }
+    .game-container {
+      background: #2a2a40;
+      border-radius: 12px;
+      padding: 30px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+      width: 100%;
+      max-width: 500px;
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    .screen { display: none; }
+    .screen.active { display: block; }
+    h1 { color: #00ffcc; margin-top: 0; }
+    input, button, select {
+      width: 100%;
+      padding: 12px;
+      margin: 10px 0;
+      border-radius: 6px;
+      border: none;
+      font-size: 16px;
+      box-sizing: border-box;
+    }
+    input[type="text"], input[type="number"] {
+      background: #3b3b54;
+      color: #fff;
+    }
+    button {
+      background: #00ffcc;
+      color: #1e1e2f;
+      font-weight: bold;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    button:hover { background: #00cc99; }
+    button.secondary {
+      background: #ff4757;
+      color: white;
+    }
+    button.secondary:hover { background: #e04050; }
+    .player-list, .clue-list, .vote-list {
+      text-align: left;
+      background: #1e1e2f;
+      padding: 15px;
+      border-radius: 6px;
+      margin: 15px 0;
+    }
+    .badge {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: bold;
+      margin-left: 10px;
+    }
+    .badge.host { background: #ffca28; color: #1e1e2f; }
+    .badge.ready { background: #2ecc71; color: white; }
+    .secret-box {
+      background: #ff4757;
+      padding: 20px;
+      border-radius: 8px;
+      font-size: 22px;
+      font-weight: bold;
+      margin: 20px 0;
+      border: 2px dashed #fff;
+    }
+    .secret-box.crew { background: #2ed573; }
+    
+    /* Global Chat Layout Components */
+    .chat-container {
+      width: 100%;
+      max-width: 500px;
+      background: #2a2a40;
+      border-radius: 12px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+      overflow: hidden;
+      display: none; /* Shows up once in a room */
+      flex-direction: column;
+    }
+    .chat-header {
+      background: #202035;
+      padding: 10px 15px;
+      font-weight: bold;
+      color: #00ffcc;
+      border-bottom: 1px solid #3b3b54;
+      font-size: 14px;
+    }
+    .chat-logs {
+      height: 140px;
+      padding: 10px;
+      overflow-y: auto;
+      background: #1e1e2f;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      text-align: left;
+      font-size: 14px;
+    }
+    .chat-msg {
+      word-break: break-word;
+      line-height: 1.4;
+    }
+    .chat-msg .sender {
+      color: #ffca28;
+      font-weight: bold;
+      margin-right: 5px;
+    }
+    .chat-input-area {
+      display: flex;
+      border-top: 1px solid #3b3b54;
+    }
+    .chat-input-area input {
+      flex: 1;
+      margin: 0;
+      border-radius: 0;
+      background: #2a2a40;
+      padding: 10px;
+    }
+    .chat-input-area button {
+      width: auto;
+      margin: 0;
+      border-radius: 0;
+      padding: 0 20px;
+    }
+  </style>
 </head>
 <body>
 
-<div class="stars" id="stars"></div>
+  <div class="game-container">
+    <h1>🔢 Number Imposter</h1>
 
-<div id="app">
-
-  <div class="hud-badge" id="crewmate-persistent-hud">YOUR NUMBER: <span id="hud-number-slot">—</span></div>
-
-  <div class="screen active" id="screen-lobby">
-    <div class="logo">NUMBER IMPOSTER</div>
-    <div class="logo-sub">multiplayer deduction game</div>
-
-    <div class="card">
-      <div class="card-title"><span class="dot"></span> Create Game</div>
-      <div class="mb-8">Your name</div>
-      <input type="text" id="host-name" placeholder="Enter your name..." maxlength="18">
-      <div class="mt-20">
-        <button class="btn btn-primary btn-full" onclick="createGame()">Create Lobby →</button>
-      </div>
+    <div id="screen-login" class="screen active">
+      <input type="text" id="input-name" placeholder="Enter your name" maxlength="12">
+      <button id="btn-create">Create Custom Room</button>
+      <hr style="border-color: #3b3b54; margin: 20px 0;">
+      <input type="text" id="input-code" placeholder="Enter 4-Letter Code" maxlength="4" style="text-transform: uppercase;">
+      <button id="btn-join" class="secondary">Join Existing Room</button>
     </div>
 
-    <div class="card text-center" style="padding:20px">
-      <div class="flex-row">
-        <input type="text" id="join-code" placeholder="ROOM CODE" maxlength="4" style="text-transform:uppercase;letter-spacing:3px">
-        <input type="text" id="join-name" placeholder="Your name" maxlength="18" style="width:130px;flex-shrink:0">
-      </div>
-      <button class="btn btn-secondary btn-full mt-12" onclick="joinGame()">Join Game</button>
-    </div>
-  </div>
-
-  <div class="screen" id="screen-waiting">
-    <div class="card">
-      <div class="card-title"><span class="dot"></span> Room Code</div>
-      <div style="font-family:'Syne',sans-serif;font-size:2.8rem;font-weight:800;letter-spacing:8px;color:var(--purple-pale);text-align:center;" id="display-code">—</div>
+    <div id="screen-lobby" class="screen">
+      <h2>Room Code: <span id="display-room-code" style="color:#00ffcc;">-</span></h2>
+      <div class="player-list" id="lobby-player-list"></div>
+      <button id="btn-start-game" style="display:none;">Start Game</button>
+      <p id="lobby-wait-text" style="color: #bbb;">Waiting for host to begin...</p>
     </div>
 
-    <div class="card">
-      <div class="card-title"><span class="dot"></span> Players <span style="color:var(--text-dim);font-size:0.8rem;margin-left:auto" id="player-count-label">0 joined</span></div>
-      <div class="player-list" id="waiting-players"></div>
+    <div id="screen-role" class="screen">
+      <h2>Your Secret Status</h2>
+      <div id="role-box" class="secret-box">Determining Role...</div>
+      <p style="color: #bbb;">Memorize your objective, then signal you are ready.</p>
+      <button id="btn-ready">I Am Ready</button>
+      <div id="ready-status-box" style="margin-top:15px; font-size:14px; color:#00ffcc;">Ready: 0/0</div>
     </div>
 
-    <div id="host-controls" style="display:none">
-      <button class="btn btn-primary btn-full" onclick="startGame()" id="start-btn">Start Game</button>
+    <div id="screen-turn-reveal" class="screen">
+      <h2>Round <span id="display-round-num">1</span> Turn Order</h2>
+      <p style="color: #bbb;">The sequence remains identical across all rounds!</p>
+      <div class="player-list" id="turn-order-list"></div>
+      <button id="btn-host-start-clues" style="display:none;">Begin Answering Phase</button>
+      <p id="turn-wait-text" style="color: #bbb;">Waiting for host to launch turn phase...</p>
     </div>
-  </div>
 
-  <div class="screen" id="screen-role">
-    <div id="role-card-container"></div>
-    <div class="card text-center" id="ready-action-card">
-      <button class="btn btn-primary btn-full" onclick="readyForRound()">I'm Ready →</button>
-    </div>
-    <div class="card text-center" id="waiting-ready-card" style="display:none">
-      <div class="player-list" id="ready-players"></div>
-    </div>
-  </div>
-
-  <div class="screen" id="screen-turn-reveal">
-    <div class="card text-center">
-      <div class="card-title"><span class="dot"></span> Turn order (Round <span class="reveal-round-title">1</span>)</div>
-      <p style="font-size:0.85rem;color:var(--text-dim);margin-bottom:20px;">Review the order! You can only submit a clue when your number is called.</p>
+    <div id="screen-answer" class="screen">
+      <h2>Round <span id="display-answer-round-num">1</span>: Submit Clue</h2>
+      <div id="turn-announcement" style="font-size:18px; margin: 15px 0; font-weight:bold; color:#ffca28;">-</div>
       
-      <div class="player-list" id="reveal-order-list" style="gap:12px;margin-bottom:20px;text-align:left;"></div>
-
-      <div id="host-reveal-controls" style="display:none">
-        <button class="btn btn-primary btn-full" onclick="launchAnsweringPhase()">Begin Round →</button>
+      <div id="clue-input-wrapper" style="display:none;">
+        <p style="color:#bbb; font-size:14px;">Input exactly one conceptual word mapping to your assigned number data.</p>
+        <input type="text" id="input-clue-word" placeholder="Your one-word clue" maxlength="20">
+        <button id="btn-submit-clue">Submit Clue Word</button>
       </div>
-      <div id="player-reveal-notice" style="color:var(--text-dim);font-size:0.8rem;">
-        Waiting for the host to start...
+
+      <div class="clue-list" id="live-clues-box">
+        <strong style="color:#00ffcc;">Clues Logged So Far:</strong>
+        <div id="live-clues-list" style="margin-top:10px;"></div>
       </div>
-    </div>
-  </div>
 
-  <div class="screen" id="screen-answer">
-    <div class="turn-banner" id="active-turn-banner">Calculating turn assignments...</div>
-
-    <div class="card" id="answer-input-card" style="display:none">
-      <div class="card-title"><span class="dot"></span> Your Turn! Type your Clue</div>
-      <input type="text" id="answer-input" placeholder="Type a word clue..." maxlength="40">
-      <button class="btn btn-primary btn-full mt-12" id="clue-submit-btn" onclick="submitAnswer()">Submit Word</button>
+      <button id="btn-host-clue-done" style="display:none;">Advance to Evaluation</button>
     </div>
 
-    <div class="card text-center" id="answer-waiting-card">
-      <p style="font-size:0.88rem;color:var(--text-dim)">Waiting for the clue</p>
-    </div>
-
-    <div class="card">
-      <div class="card-title"><span class="dot"></span> Clues (Round <span id="round-number-label">1</span>)</div>
-      <div class="answers-grid" id="live-answers-grid"></div>
-      <div class="mt-16" id="next-round-btn-container"></div>
-    </div>
-  </div>
-
-  <div class="screen" id="screen-continue-vote">
-    <div class="card text-center">
-      <div class="card-title"><span class="dot"></span> Extend the Game?</div>
-      <p style="font-size:0.9rem;margin-bottom:20px;color:var(--text-dim)">Do you need more round clues before voting out the imposter?</p>
-      <div class="flex-row" id="continue-choice-buttons">
-        <button class="btn btn-primary" onclick="voteContinue('more')">➕ Another round?</button>
-        <button class="btn btn-danger" onclick="voteContinue('vote')">🗳️ Go directly to Vote</button>
+    <div id="screen-review" class="screen">
+      <h2>Review Submitted Clues</h2>
+      <div class="clue-list" id="review-clues-list"></div>
+      
+      <div id="imposter-guess-wrapper" style="display:none; background:#3b3b54; padding:15px; border-radius:6px; margin-bottom:15px;">
+        <h3 style="margin-top:0; color:#ff4757;">⚡ Imposter Action Menu</h3>
+        <p style="font-size:14px;">Cracked the code? Submit a raw number guess to force absolute instant victory.</p>
+        <input type="number" id="input-imposter-guess" placeholder="Guess the number (1-10)" min="1" max="10">
+        <button id="btn-imposter-guess" class="secondary">Submit Blind Guess</button>
       </div>
-    </div>
-    <div class="card">
-      <div class="card-title"><span class="dot"></span> Lobby Consensus Status</div>
-      <div class="player-list" id="continue-status-list"></div>
-    </div>
-  </div>
 
-  <div class="screen" id="screen-vote">
-    <div class="card"><div id="vote-all-answers"></div></div>
-    <div class="card" id="vote-form-card">
-      <div class="card-title"><span class="dot"></span> Vote out the Imposter</div>
-      <div class="vote-grid" id="vote-player-grid"></div>
-      <button class="btn btn-danger btn-full mt-16" onclick="submitVote()" id="submit-vote-btn" disabled>Cast Vote</button>
+      <div id="host-review-controls" style="display:none;">
+        <button id="btn-advance-round2">Proceed Directly to Round 2</button>
+        <button id="btn-advance-decision" class="secondary">Call Consensus Action Vote</button>
+      </div>
+      <p id="review-wait-text" style="color: #bbb;">Waiting for host choice configuration...</p>
     </div>
-    <div class="card text-center" id="vote-submitted-card" style="display:none">
-      <div class="player-list" id="vote-status-list"></div>
-    </div>
-  </div>
 
-  <div class="screen" id="screen-result">
-    <div class="card text-center">
-      <div style="font-size:1.3rem;font-weight:700;color:var(--accent2);margin-bottom:12px;" id="result-victory-declaration"></div>
-      <div style="font-size:1.5rem;font-weight:800;color:var(--imposter);display:none;" id="result-imposter-box"></div>
-      <div style="margin-top:10px;font-size:1rem;color:var(--text-dim);display:none;" id="result-number-reveal"></div>
-      <div id="failed-guess-reveal-zone"></div>
+    <div id="screen-prompt-continue" class="screen">
+      <h2>Consensus Resolution Vote</h2>
+      <p>Do you require another comprehensive round of clues, or are you prepared to vote out the suspected Imposter?</p>
+      <button id="btn-vote-more" style="background:#2ecc71; color:white;">Request More Clues</button>
+      <button id="btn-vote-exile" class="secondary">Proceed to Exile Vote</button>
+      <div id="continue-tally-box" style="margin-top:15px; font-size:14px; color:#00ffcc;">Votes logged: 0</div>
     </div>
-    <div class="card"><div class="vote-results" id="final-vote-results"></div></div>
-    <div class="card" id="host-result-controls" style="display:none">
-      <div id="host-action-buttons-wrapper"></div>
+
+    <div id="screen-vote" class="screen">
+      <h2>Exile Voting Phase</h2>
+      <p style="color: #bbb;">Cast your ballot for the player you believe is the Imposter.</p>
+      <div class="vote-list" id="voting-options-box"></div>
+      <div id="vote-tally-box" style="margin-top:15px; font-size:14px; color:#00ffcc;">Ballots processed: 0</div>
     </div>
-    <div class="card text-center" id="player-tiebreaker-notice" style="display:none; color:var(--warn)">
-      The Host is setting up the emergency tie-breaker round...
+
+    <div id="screen-result" class="screen">
+      <h2>Game Over</h2>
+      <h3 id="display-game-result" style="color:#ff4757; font-size:24px;">-</h3>
+      <div class="player-list" id="final-reveal-box" style="line-height:1.6;"></div>
+      <button id="btn-play-again" style="display:none;">Play Again</button>
+      <p id="result-wait-text" style="color: #bbb;">Waiting for host to recreate lobby...</p>
     </div>
   </div>
 
-</div>
-
-<div class="imposter-shortcut-bar" id="imposter-trap-dock">
-  <p>⚡ Guess the number:</p>
-  <input type="number" id="imposter-clandestine-number" placeholder="Code (1-10)" min="1" max="10">
-  <button class="btn btn-danger" onclick="triggerClandestineGuess()">Submit Guess 💥</button>
-</div>
-
-<script src="/socket.io/socket.io.js"></script>
-
-<script>
-// Point directly to the base window domain
-const socket = io(window.location.origin);
-
-let state = {
-  roomCode: null,
-  playerId: null,
-  playerName: null,
-  isHost: false,
-  players: [],
-  turnOrder: [],
-  myRole: 'crewmate',
-  theNumber: null,
-  round: 1,
-  phase: 'lobby',
-  selectedVote: null,
-  tieBreakerActive: false
-};
-
-function showScreen(id) {
-  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-  document.getElementById('screen-' + id).classList.add('active');
-  
-  const hud = document.getElementById('crewmate-persistent-hud');
-  if (state.myRole === 'crewmate' && state.theNumber && ['turn-reveal', 'answer', 'continue-vote', 'vote'].includes(id)) {
-    hud.style.display = 'block';
-  } else {
-    hud.style.display = 'none';
-  }
-}
-
-function createGame() {
-  const name = document.getElementById('host-name').value.trim();
-  if (!name) return;
-  state.playerName = name;
-  state.isHost = true;
-  socket.emit('createRoom', { playerName: name });
-}
-
-function joinGame() {
-  const code = document.getElementById('join-code').value.trim().toUpperCase();
-  const name = document.getElementById('join-name').value.trim();
-  if (!code || !name) return;
-  state.playerName = name;
-  state.isHost = false;
-  socket.emit('joinRoom', { roomCode: code, playerName: name });
-}
-
-function startGame() {
-  if (state.isHost && state.roomCode) {
-    socket.emit('startGame', { roomCode: state.roomCode });
-  }
-}
-
-function readyForRound() {
-  document.getElementById('ready-action-card').style.display = 'none';
-  document.getElementById('waiting-ready-card').style.display = 'block';
-  socket.emit('playerReady', { roomCode: state.roomCode });
-}
-
-function launchAnsweringPhase() {
-  socket.emit('startAnswering', { roomCode: state.roomCode });
-}
-
-function submitAnswer() {
-  const val = document.getElementById('answer-input').value.trim();
-  if (!val) return;
-  
-  const btn = document.getElementById('clue-submit-btn');
-  if (btn) btn.disabled = true;
-  
-  document.getElementById('answer-input-card').style.display = 'none';
-  socket.emit('submitClue', { roomCode: state.roomCode, clueWord: val });
-}
-
-function voteContinue(choice) {
-  document.getElementById('continue-choice-buttons').style.display = 'none';
-  socket.emit('submitContinueChoice', { roomCode: state.roomCode, choice: choice });
-}
-
-function triggerClandestineGuess() {
-  const inputEl = document.getElementById('imposter-clandestine-number');
-  const num = inputEl.value.trim();
-  if (!num) return;
-  socket.emit('imposterGuessNumber', { roomCode: state.roomCode, guessedNumber: num });
-  inputEl.value = '';
-}
-
-function requestNextPhase(target) {
-  socket.emit('nextPhase', { roomCode: state.roomCode, targetPhase: target });
-}
-
-function selectVote(id, el) {
-  state.selectedVote = id;
-  document.querySelectorAll('.vote-btn').forEach(b => b.classList.remove('selected'));
-  el.classList.add('selected');
-  document.getElementById('submit-vote-btn').disabled = false;
-}
-
-function submitVote() {
-  document.getElementById('vote-form-card').style.display = 'none';
-  document.getElementById('vote-submitted-card').style.display = 'block';
-  socket.emit('castVote', { roomCode: state.roomCode, targetPlayerId: state.selectedVote });
-}
-
-function playAgain() {
-  socket.emit('resetGame', { roomCode: state.roomCode });
-}
-
-// ─── SOCKET LISTENERS ─────────────────────────────────
-
-socket.on('connect', () => {
-  state.playerId = socket.id;
-});
-
-socket.on('roomUpdated', (room) => {
-  state.roomCode = room.code;
-  state.players = room.players;
-  state.phase = room.phase;
-  state.theNumber = null;
-  state.myRole = 'crewmate';
-  state.tieBreakerActive = false;
-  
-  document.getElementById('imposter-trap-dock').style.display = 'none';
-  document.getElementById('crewmate-persistent-hud').style.display = 'none';
-  document.getElementById('display-code').textContent = room.code;
-  document.getElementById('player-count-label').textContent = `${room.players.length} joined`;
-  document.getElementById('host-controls').style.display = state.isHost ? 'block' : 'none';
-  
-  const btn = document.getElementById('start-btn');
-  if (btn) btn.disabled = room.players.length < 3;
-  
-  const targetContainer = document.getElementById('waiting-players');
-  targetContainer.innerHTML = ''; 
-  targetContainer.innerHTML = room.players.map(p => 
-    `<div class="player-item"><div class="player-badge">${p.name} ${p.id === room.hostId ? '👑' : ''}</div><div class="status-dot"></div></div>`
-  ).join('');
-  
-  showScreen('waiting');
-});
-
-socket.on('goToRoleScreen', (room) => {
-  state.phase = 'role';
-  state.round = room.round;
-  state.myRole = room.roles[state.playerId];
-  state.theNumber = room.theNumber;
-  state.tieBreakerActive = false;
-  
-  const isImposter = state.myRole === 'imposter';
-  document.getElementById('imposter-trap-dock').style.display = isImposter ? 'flex' : 'none';
-
-  if (!isImposter) {
-    document.getElementById('hud-number-slot').textContent = state.theNumber;
-  } else {
-    document.getElementById('crewmate-persistent-hud').style.display = 'none';
-  }
-
-  document.getElementById('role-card-container').innerHTML = `
-    <div class="role-card ${isImposter ? 'imposter' : 'crewmate'}">
-      <div class="role-label ${isImposter ? 'imposter' : 'crewmate'}">${isImposter ? 'IMPOSTER' : 'CREWMATE'}</div>
-      <div class="role-number ${isImposter ? 'imposter-text' : ''}">${isImposter ? 'Objective: Blending and guess the number' : 'Number: ' + state.theNumber}</div>
+  <div class="chat-container" id="global-chat-panel">
+    <div class="chat-header">🌐 Live Room Chat</div>
+    <div class="chat-logs" id="chat-logs"></div>
+    <div class="chat-input-area">
+      <input type="text" id="input-chat-msg" placeholder="Type a message..." maxlength="80">
+      <button id="btn-send-chat">Send</button>
     </div>
-  `;
-  
-  document.getElementById('ready-action-card').style.display = 'block';
-  document.getElementById('waiting-ready-card').style.display = 'none';
-  
-  const rc = document.getElementById('ready-players');
-  rc.innerHTML = ''; 
-  rc.innerHTML = state.players.map(p => 
-    `<div class="player-item"><div>${p.name}</div><span class="player-waiting" id="ready-status-${p.id}">⏳ Waiting</span></div>`
-  ).join('');
-  
-  showScreen('role');
-});
+  </div>
 
-socket.on('readyListUpdated', (readyPlayersMap) => {
-  state.players.forEach(p => {
-    const el = document.getElementById(`ready-status-${p.id}`);
-    if (el && readyPlayersMap[p.id]) {
-      el.className = 'player-answered';
-      el.textContent = '✓ Ready';
+  <script>
+    const socket = io();
+    let myName = "";
+    let myRoomCode = "";
+    let currentRoomState = null;
+
+    // Element Registry Helper Shortcut
+    const $ = id => document.getElementById(id);
+
+    function showScreen(screenId) {
+      document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+      $(screenId).classList.add('active');
+      
+      // Keep chat layout visibility tethered to active room parameters
+      if(screenId !== 'screen-login') {
+        $('global-chat-panel').style.display = 'flex';
+      } else {
+        $('global-chat-panel').style.display = 'none';
+      }
     }
-  });
-});
 
-socket.on('goToTurnRevealScreen', (room) => {
-  state.phase = 'turnReveal';
-  state.round = room.round;
-  state.turnOrder = room.turnOrder;
-  state.tieBreakerActive = room.tieBreakerActive;
+    // 1. LOGIN CONTROLS
+    $('btn-create').onclick = () => {
+      const name = $('input-name').value.trim();
+      if(!name) return alert('Input valid name parameter');
+      myName = name;
+      socket.emit('createRoom', { playerName: name });
+    };
 
-  document.querySelectorAll('.reveal-round-title').forEach(el => el.textContent = room.round);
-  
-  const orderList = document.getElementById('reveal-order-list');
-  orderList.innerHTML = ''; 
-  orderList.innerHTML = room.turnOrder.map((p, index) => `
-    <div class="order-item">
-      <div class="order-badge">${index + 1}</div>
-      <div class="order-name">${p.name} ${p.id === state.playerId ? '<span style="color:var(--accent)">(You)</span>' : ''}</div>
-    </div>
-  `).join('');
+    $('btn-join').onclick = () => {
+      const name = $('input-name').value.trim();
+      const code = $('input-code').value.trim().toUpperCase();
+      if(!name || !code) return alert('Input valid name and code strings');
+      myName = name;
+      myRoomCode = code;
+      socket.emit('joinRoom', { roomCode: code, playerName: name });
+    };
 
-  document.getElementById('host-reveal-controls').style.display = state.isHost ? 'block' : 'none';
-  document.getElementById('player-reveal-notice').style.display = state.isHost ? 'none' : 'block';
-
-  showScreen('turn-reveal');
-});
-
-socket.on('goToAnswerScreen', (room) => {
-  state.phase = 'answer';
-  state.round = room.round;
-  state.tieBreakerActive = room.tieBreakerActive;
-  
-  document.getElementById('round-number-label').textContent = room.round;
-  document.getElementById('answer-input').value = '';
-  document.getElementById('live-answers-grid').innerHTML = '';
-  document.getElementById('next-round-btn-container').innerHTML = '';
-  
-  const btn = document.getElementById('clue-submit-btn');
-  if (btn) btn.disabled = false;
-  
-  document.getElementById('answer-input-card').style.display = 'none';
-  document.getElementById('answer-waiting-card').style.display = 'block';
-  
-  showScreen('answer');
-});
-
-socket.on('nextTurnIndex', ({ activePlayerId, activePlayerName }) => {
-  const banner = document.getElementById('active-turn-banner');
-  if (activePlayerId === state.playerId) {
-    banner.textContent = "⭐️ YOUR TURN TO SUBMIT A WORD! ⭐️";
-    const btn = document.getElementById('clue-submit-btn');
-    if (btn) btn.disabled = false;
-    document.getElementById('answer-input-card').style.display = 'block';
-    document.getElementById('answer-waiting-card').style.display = 'none';
-  } else {
-    banner.textContent = `${activePlayerName} is typing`;
-    document.getElementById('answer-input-card').style.display = 'none';
-    document.getElementById('answer-waiting-card').style.display = 'block';
-  }
-});
-
-socket.on('clueRevealedLive', ({ playerId, playerName, clueWord, roundAnswers }) => {
-  const grid = document.getElementById('live-answers-grid');
-  const currentLineup = state.turnOrder && state.turnOrder.length ? state.turnOrder : state.players;
-  
-  grid.innerHTML = ''; 
-  grid.innerHTML = currentLineup.map(p => {
-    if (roundAnswers[p.id] !== undefined) {
-      return `<div class="answer-card ${p.id === playerId ? 'newly-added' : ''}">
-                <div class="answer-player">${p.name}</div>
-                <div class="answer-text">${roundAnswers[p.id]}</div>
-              </div>`;
-    } else {
-      return `<div class="answer-card" style="opacity: 0.35; border-style: dashed;">
-                <div class="answer-player">${p.name}</div>
-                <div class="answer-text" style="font-size:0.8rem;color:var(--text-dim)">Thinking...</div>
-              </div>`;
+    // CHAT ENGINE HANDLING INTERACTIVE SUBMISSIONS
+    function executeChatSend() {
+      const msg = $('input-chat-msg').value.trim();
+      if(!msg) return;
+      socket.emit('sendChatMessage', {
+        roomCode: myRoomCode,
+        playerName: myName,
+        message: msg
+      });
+      $('input-chat-msg').value = "";
     }
-  }).join('');
-});
+    $('btn-send-chat').onclick = executeChatSend;
+    $('input-chat-msg').onkeypress = (e) => { if(e.key === 'Enter') executeChatSend(); };
 
-socket.on('showAllClues', (room) => {
-  document.getElementById('active-turn-banner').textContent = "Round complete! All clues loaded.";
-  document.getElementById('answer-input-card').style.display = 'none';
-  document.getElementById('answer-waiting-card').style.display = 'none';
-  
-  const container = document.getElementById('next-round-btn-container');
-  if (state.isHost) {
-    if (room.tieBreakerActive) {
-      container.innerHTML = `<button class="btn btn-danger btn-full" onclick="requestNextPhase('vote')">Proceed directly to Vote 🗳️</button>`;
-    } else if (room.round === 1) {
-      container.innerHTML = `<button class="btn btn-primary btn-full" onclick="requestNextPhase('round2')">Proceed to Round 2 →</button>`;
-    } else {
-      container.innerHTML = `<button class="btn btn-primary btn-full" onclick="requestNextPhase('askContinue')">Proceed into voting or next Round 🗳️</button>`;
-    }
-  } else {
-    container.innerHTML = `<div class="text-center" style="color:var(--text-dim)">Waiting for host configuration...</div>`;
-  }
-});
+    socket.on('chatMessageReceived', (msgObj) => {
+      const log = $('chat-logs');
+      const msgEl = document.createElement('div');
+      msgEl.className = "chat-msg";
+      msgEl.innerHTML = `<span class="sender">${msgObj.sender}:</span><span>${msgObj.text}</span>`;
+      log.appendChild(msgEl);
+      log.scrollTop = log.scrollHeight; // Auto-scroll to bottom
+    });
 
-socket.on('promptContinueVote', () => {
-  document.getElementById('continue-choice-buttons').style.display = 'flex';
-  
-  const cv = document.getElementById('continue-status-list');
-  cv.innerHTML = ''; 
-  cv.innerHTML = state.players.map(p => 
-    `<div class="player-item"><div>${p.name}</div><span class="player-waiting" id="continue-status-${p.id}">⏳ Voting...</span></div>`
-  ).join('');
-  showScreen('continue-vote');
-});
+    // 2. STATE UPDATER ROUTER
+    socket.on('roomUpdated', (room) => {
+      currentRoomState = room;
+      myRoomCode = room.code;
+      $('display-room-code').innerText = room.code;
 
-socket.on('continueStatusUpdated', (votesMap) => {
-  state.players.forEach(p => {
-    const el = document.getElementById(`continue-status-${p.id}`);
-    if (el && votesMap[p.id]) {
-      el.className = 'player-answered';
-      el.textContent = votesMap[p.id] === 'more' ? '✓ Wants Another Round' : '✓ Wants to Vote';
-    }
-  });
-});
+      if(room.phase === 'lobby') {
+        showScreen('screen-lobby');
+        $('lobby-player-list').innerHTML = room.players.map(p => {
+          const isHost = p.id === room.hostId ? `<span class="badge host">HOST</span>` : '';
+          return `<div style="padding:8px 0; border-bottom:1px solid #3b3b54;">👤 ${p.name} ${isHost}</div>`;
+        }).join('');
 
-socket.on('goToVoteScreen', (room) => {
-  state.phase = 'vote';
-  state.selectedVote = null;
-  document.getElementById('submit-vote-btn').disabled = true;
-  
-  let html = '';
-  Object.keys(room.answers).forEach(r => {
-    if (room.answers[r]) {
-      html += `<div style="font-size:0.7rem;color:var(--text-dim);margin-bottom:4px">Round ${r} Clues</div><div class="answers-grid mb-8">` + 
-        state.players.map(p => `<div class="answer-card"><div class="answer-player">${p.name}</div><div class="answer-text">${room.answers[r][p.id] || "No Clue"}</div></div>`).join('') + `</div>`;
-    }
-  });
-  document.getElementById('vote-all-answers').innerHTML = html;
-  
-  document.getElementById('vote-player-grid').innerHTML = state.players.map(p => 
-    `<div class="vote-btn ${p.id === state.playerId ? 'disabled' : ''}" onclick="${p.id !== state.playerId ? `selectVote('${p.id}', this)` : ''}" id="vote-${p.id}"><div class="vote-name">${p.name}</div></div>`
-  ).join('');
-  
-  document.getElementById('vote-form-card').style.display = 'block';
-  document.getElementById('vote-submitted-card').style.display = 'none';
-  
-  const vs = document.getElementById('vote-status-list');
-  vs.innerHTML = ''; 
-  vs.innerHTML = state.players.map(p => 
-    `<div class="player-item"><div>${p.name}</div><span class="player-waiting" id="vote-status-${p.id}">⏳ Deciding...</span></div>`
-  ).join('');
-  
-  showScreen('vote');
-});
+        if(socket.id === room.hostId) {
+          $('btn-start-game').style.display = 'block';
+          $('lobby-wait-text').style.display = 'none';
+        } else {
+          $('btn-start-game').style.display = 'none';
+          $('lobby-wait-text').style.display = 'block';
+        }
+      }
+    });
 
-socket.on('voteStatusUpdated', (votesMap) => {
-  state.players.forEach(p => {
-    const el = document.getElementById(`vote-status-${p.id}`);
-    if (el && votesMap[p.id]) {
-      el.className = 'player-answered';
-      el.textContent = '✓ Voted';
-    }
-  });
-});
+    // 3. START GAME -> CHOOSE ROLES
+    $('btn-start-game').onclick = () => socket.emit('startGame', { roomCode: myRoomCode });
 
-socket.on('goToResultScreen', (room) => {
-  state.phase = 'result';
-  state.tieBreakerActive = room.tieBreakerActive;
-  document.getElementById('imposter-trap-dock').style.display = 'none';
-  document.getElementById('crewmate-persistent-hud').style.display = 'none';
-  
-  const imposter = state.players.find(p => room.roles[p.id] === 'imposter');
-  document.getElementById('result-victory-declaration').textContent = room.gameOverReason || "Match Finished!";
-  
-  const impBox = document.getElementById('result-imposter-box');
-  const numRev = document.getElementById('result-number-reveal');
-  const playerNotice = document.getElementById('player-tiebreaker-notice');
-  const hostWrapper = document.getElementById('host-action-buttons-wrapper');
-  
-  if (room.tieBreakerActive) {
-    impBox.style.display = 'none';
-    numRev.style.display = 'none';
-    playerNotice.style.display = state.isHost ? 'none' : 'block';
-    if (state.isHost) {
-      hostWrapper.innerHTML = `<button class="btn btn-danger btn-full" onclick="requestNextPhase('tiebreakerRound')">Launch Tie-Breaker Round 🚨</button>`;
-    }
-  } else {
-    impBox.style.display = 'block';
-    numRev.style.display = 'block';
-    playerNotice.style.display = 'none';
-    
-    impBox.textContent = "IMPOSTER WAS: " + (imposter ? imposter.name : 'Unknown');
-    numRev.textContent = `The Hidden Number was: ${room.theNumber}`;
-    if (state.isHost) {
-      hostWrapper.innerHTML = `<button class="btn btn-primary btn-full" onclick="playAgain()">Play Again</button>`;
-    }
-  }
-  
-  const revealZone = document.getElementById('failed-guess-reveal-zone');
-  if (!room.tieBreakerActive && room.failedImposterGuess !== null) {
-    revealZone.innerHTML = `<div class="guess-reveal-badge">⚠️ The Imposter guessed <strong>${room.failedImposterGuess}</strong> and blew their cover!</div>`;
-  } else {
-    revealZone.innerHTML = '';
-  }
-  
-  const tally = room.voteTally || {};
-  const maxVotes = Math.max(...Object.values(tally), 1);
-  
-  const finalVoteEl = document.getElementById('final-vote-results');
-  finalVoteEl.innerHTML = ''; 
-  finalVoteEl.innerHTML = state.players.sort((a,b) => (tally[b.id]||0) - (tally[a.id]||0)).map(p => `
-    <div class="vote-bar">
-      <div class="vote-bar-name">${p.name} ${(!room.tieBreakerActive && room.roles[p.id]==='imposter')?'🕵️':''}</div>
-      <div class="vote-bar-track"><div class="vote-bar-fill" style="width:${((tally[p.id]||0)/maxVotes)*100}%"></div></div>
-      <div class="vote-bar-count">${tally[p.id]||0}</div>
-    </div>
-  `).join('');
-  
-  document.getElementById('host-result-controls').style.display = state.isHost ? 'block' : 'none';
-  showScreen('result');
-});
+    socket.on('goToRoleScreen', (room) => {
+      currentRoomState = room;
+      showScreen('screen-role');
+      $('btn-ready').style.display = 'block';
+      $('ready-status-box').innerText = `Ready: 0 / ${room.players.length}`;
 
-socket.on('errorMsg', (msg) => {
-  alert(msg);
-});
+      const myRole = room.roles[socket.id];
+      const rBox = $('role-box');
 
-function makeStars() {
-  const container = document.getElementById('stars');
-  for (let i = 0; i < 40; i++) {
-    const star = document.createElement('div');
-    star.className = 'star';
-    const size = Math.random() * 2 + 0.5;
-    star.style.cssText = `width:${size}px;height:${size}px;left:${Math.random()*100}%;top:${Math.random()*100}%;--d:${2+Math.random()*3}s;--delay:${Math.random()*4}s;--op:${0.4+Math.random()*0.6};`;
-    container.appendChild(star);
-  }
-}
-makeStars();
-</script>
+      if(myRole === 'imposter') {
+        rBox.className = "secret-box";
+        rBox.innerText = "🕵️ You are the IMPOSTER! Try to blend in and guess the secret number.";
+      } else {
+        rBox.className = "secret-box crew";
+        rBox.innerText = `👨‍🚀 Crewmate. The Target Code Number is: ${room.theNumber}`;
+      }
+    });
+
+    $('btn-ready').onclick = () => {
+      $('btn-ready').style.display = 'none';
+      socket.emit('playerReady', { roomCode: myRoomCode });
+    };
+
+    socket.on('readyListUpdated', (readyMap) => {
+      const total = currentRoomState.players.length;
+      const count = Object.keys(readyMap).length;
+      $('ready-status-box').innerText = `Ready: ${count} / ${total}`;
+    });
+
+    // 4. TURN ORDER PRESENTATION SCREEN
+    socket.on('goToTurnRevealScreen', (room) => {
+      currentRoomState = room;
+      showScreen('screen-turn-reveal');
+      $('display-round-num').innerText = room.round;
+
+      $('turn-order-list').innerHTML = room.turnOrder.map((p, idx) => {
+        return `<div style="padding:8px 0;"><strong>${idx + 1}.</strong> 👤 ${p.name}</div>`;
+      }).join('');
+
+      if(socket.id === room.hostId) {
+        $('btn-host-start-clues').style.display = 'block';
+        $('turn-wait-text').style.display = 'none';
+      } else {
+        $('btn-host-start-clues').style.display = 'none';
+        $('turn-wait-text').style.display = 'block';
+      }
+    });
+
+    $('btn-host-start-clues').onclick = () => socket.emit('startAnswering', { roomCode: myRoomCode });
+
+    // 5. CLUE SUBMISSION PROCESSING LOOP
+    socket.on('goToAnswerScreen', (room) => {
+      currentRoomState = room;
+      showScreen('screen-answer');
+      $('display-answer-round-num').innerText = room.round;
+      $('live-clues-list').innerHTML = '';
+      $('input-clue-word').value = '';
+      $('btn-host-clue-done').style.display = 'none';
+    });
+
+    socket.on('nextTurnIndex', (data) => {
+      $('turn-announcement').innerText = `Current Turn: ${data.activePlayerName}`;
+      if(socket.id === data.activePlayerId) {
+        $('clue-input-wrapper').style.display = 'block';
+      } else {
+        $('clue-input-wrapper').style.display = 'none';
+      }
+    });
+
+    $('btn-submit-clue').onclick = () => {
+      const clue = $('input-clue-word').value.trim();
+      if(!clue || clue.includes(' ')) return alert('Clue must be single word configuration');
+      $('clue-input-wrapper').style.display = 'none';
+      socket.emit('submitClue', { roomCode: myRoomCode, clueWord: clue });
+    };
+
+    socket.on('clueRevealedLive', (data) => {
+      const item = document.createElement('div');
+      item.style.padding = "5px 0";
+      item.innerHTML = `📌 <strong>${data.playerName}:</strong> ${data.clueWord}`;
+      $('live-clues-list').appendChild(item);
+    });
+
+    socket.on('showAllClues', (room) => {
+      currentRoomState = room;
+      $('turn-announcement').innerText = "All clues received!";
+      if(socket.id === room.hostId) {
+        $('btn-host-clue-done').style.display = 'block';
+      }
+    });
+
+    $('btn-host-clue-done').onclick = () => {
+      showScreen('screen-review');
+      
+      const rList = $('review-clues-list');
+      rList.innerHTML = '';
+      
+      // Render final round matrix
+      Object.keys(currentRoomState.answers).forEach(rNum => {
+        const roundTitle = document.createElement('h4');
+        roundTitle.innerText = `Round ${rNum} Clues:`;
+        roundTitle.style.margin = "10px 0 5px 0";
+        roundTitle.style.color = "#00ffcc";
+        rList.appendChild(roundTitle);
+        
+        const ansMap = currentRoomState.answers[rNum];
+        currentRoomState.players.forEach(p => {
+          const cWord = ansMap[p.id] || '(No clue submitted)';
+          const entry = document.createElement('div');
+          entry.innerHTML = `👤 <strong>${p.name}:</strong> ${cWord}`;
+          entry.style.padding = "4px 0";
+          rList.appendChild(entry);
+        });
+      });
+
+      if(currentRoomState.roles[socket.id] === 'imposter') {
+        $('imposter-guess-wrapper').style.display = 'block';
+      } else {
+        $('imposter-guess-wrapper').style.display = 'none';
+      }
+
+      if(socket.id === currentRoomState.hostId) {
+        $('host-review-controls').style.display = 'block';
+        $('review-wait-text').style.display = 'none';
+      } else {
+        $('host-review-controls').style.display = 'none';
+        $('review-wait-text').style.display = 'block';
+      }
+      
+      socket.emit('syncReviewScreenData', { roomCode: myRoomCode });
+    };
+
+    socket.on('forceClientReviewScreenSync', (markupHTML) => {
+      if(socket.id !== currentRoomState.hostId) {
+        showScreen('screen-review');
+        $('review-clues-list').innerHTML = markupHTML;
+        if(currentRoomState.roles[socket.id] === 'imposter') {
+          $('imposter-guess-wrapper').style.display = 'block';
+        }
+      }
+    });
+
+    $('btn-imposter-guess').onclick = () => {
+      const g = $('input-imposter-guess').value;
+      if(!g) return alert('Input valid guess target data');
+      socket.emit('imposterGuessNumber', { roomCode: myRoomCode, guessedNumber: g });
+    };
+
+    $('btn-advance-round2').onclick = () => socket.emit('nextPhase', { roomCode: myRoomCode, targetPhase: 'round2' });
+    $('btn-advance-decision').onclick = () => socket.emit('nextPhase', { roomCode: myRoomCode, targetPhase: 'askContinue' });
+
+    // 6. STRATEGIC PHASING CONVERGENCE VOTING
+    socket.on('promptContinueVote', () => {
+      showScreen('screen-prompt-continue');
+      $('continue-tally-box').innerText = `Votes logged: 0 / ${currentRoomState.players.length}`;
+    });
+
+    $('btn-vote-more').onclick = () => socket.emit('submitContinueChoice', { roomCode: myRoomCode, choice: 'more' });
+    $('btn-vote-exile').onclick = () => socket.emit('submitContinueChoice', { roomCode: myRoomCode, choice: 'vote' });
+
+    socket.on('continueStatusUpdated', (votesMap) => {
+      const count = Object.keys(votesMap).length;
+      $('continue-tally-box').innerText = `Votes logged: ${count} / ${currentRoomState.players.length}`;
+    });
+
+    // 7. FINAL BALANCED ELIMINATION VOTING
+    socket.on('goToVoteScreen', (room) => {
+      currentRoomState = room;
+      showScreen('screen-vote');
+      $('vote-tally-box').innerText = `Ballots processed: 0 / ${room.players.length}`;
+
+      $('voting-options-box').innerHTML = room.players.map(p => {
+        return `<button onclick="castBallot('${p.id}')">Vote Out: ${p.name}</button>`;
+      }).join('');
+    });
+
+    window.castBallot = (targetId) => {
+      $('voting-options-box').innerHTML = `<p style="text-align:center; color:#00ffcc;">Ballot securely submitted! Waiting for others...</p>`;
+      socket.emit('castVote', { roomCode: myRoomCode, targetPlayerId: targetId });
+    };
+
+    socket.on('voteStatusUpdated', (votesMap) => {
+      const count = Object.keys(votesMap).length;
+      $('vote-tally-box').innerText = `Ballots processed: ${count} / ${currentRoomState.players.length}`;
+    });
+
+    // 8. FINAL MATCH WRAP-UP
+    socket.on('goToResultScreen', (room) => {
+      currentRoomState = room;
+      showScreen('screen-result');
+      $('display-game-result').innerText = room.gameOverReason;
+
+      let revealHTML = `<h4>Truth Reveal Details:</h4>`;
+      revealHTML += `<p>🎯 <strong>The Secret Code Word Value was: ${room.theNumber}</strong></p>`;
+      
+      if(room.failedImposterGuess) {
+        revealHTML += `<p>❌ The Imposter blindly guessed incorrect value: ${room.failedImposterGuess}</p>`;
+      }
+
+      revealHTML += `<ul style="padding-left:20px;">`;
+      room.players.forEach(p => {
+        const roleName = room.roles[p.id].toUpperCase();
+        const scoreTally = (room.voteTally && room.voteTally[p.id] !== undefined) ? room.voteTally[p.id] : 0;
+        revealHTML += `<li><strong>${p.name}</strong>: Role: [${roleName}] | Received: ${scoreTally} exile votes</li>`;
+      });
+      revealHTML += `</ul>`;
+      $('final-reveal-box').innerHTML = revealHTML;
+
+      if(socket.id === room.hostId) {
+        $('btn-play-again').style.display = 'block';
+        $('result-wait-text').style.display = 'none';
+      } else {
+        $('btn-play-again').style.display = 'none';
+        $('result-wait-text').style.display = 'block';
+      }
+    });
+
+    $('btn-play-again').onclick = () => socket.emit('resetGame', { roomCode: myRoomCode });
+
+    socket.on('errorMsg', (str) => alert(str));
+  </script>
 </body>
 </html>
