@@ -29,10 +29,11 @@ io.on('connection', (socket) => {
       round: 1,
       hostId: socket.id,
       players: [{ id: socket.id, name: playerName }],
-      answers: {}, // Dynamic rounds mapping
+      answers: {}, 
       votes: {},
       readyPlayers: {},
-      continueVotes: {}
+      continueVotes: {},
+      turnIndex: 0 // Tracks whose turn it is to type
     };
 
     socket.emit('roomUpdated', rooms[code]);
@@ -92,23 +93,47 @@ io.on('connection', (socket) => {
     if (Object.keys(room.readyPlayers).length === room.players.length) {
       room.phase = 'answer';
       room.readyPlayers = {}; 
+      room.turnIndex = 0; // Start at the first player
       io.to(roomCode).emit('goToAnswerScreen', room);
+      io.to(roomCode).emit('nextTurnIndex', { 
+        activePlayerId: room.players[room.turnIndex].id, 
+        activePlayerName: room.players[room.turnIndex].name 
+      });
     }
   });
 
-  // 5. PLAYER SUBMITS WORD CLUE (Updated to handle strings)
+  // 5. PLAYER SUBMITS WORD CLUE (Turn-by-turn live broadcast)
   socket.on('submitClue', ({ roomCode, clueWord }) => {
     const room = rooms[roomCode];
     if (!room) return;
+
+    const currentExpectedPlayer = room.players[room.turnIndex];
+    if (socket.id !== currentExpectedPlayer.id) return; // Prevent out-of-turn submissions
 
     if (!room.answers[room.round]) {
       room.answers[room.round] = {};
     }
 
+    // Save clue and instantly broadcast this single clue update to everyone
     room.answers[room.round][socket.id] = clueWord;
-    io.to(roomCode).emit('clueStatusUpdated', room.answers[room.round]);
+    io.to(roomCode).emit('clueRevealedLive', {
+      playerId: socket.id,
+      playerName: currentExpectedPlayer.name,
+      clueWord: clueWord,
+      roundAnswers: room.answers[room.round]
+    });
 
-    if (Object.keys(room.answers[room.round]).length === room.players.length) {
+    // Move to next player's turn
+    room.turnIndex++;
+
+    if (room.turnIndex < room.players.length) {
+      // Trigger next person's turn
+      io.to(roomCode).emit('nextTurnIndex', { 
+        activePlayerId: room.players[room.turnIndex].id, 
+        activePlayerName: room.players[room.turnIndex].name 
+      });
+    } else {
+      // Everyone went! Show the navigation layout
       io.to(roomCode).emit('showAllClues', room);
     }
   });
@@ -120,10 +145,14 @@ io.on('connection', (socket) => {
 
     if (targetPhase === 'round2') {
       room.round = 2;
+      room.turnIndex = 0;
       room.answers[2] = {};
       io.to(roomCode).emit('goToAnswerScreen', room);
+      io.to(roomCode).emit('nextTurnIndex', { 
+        activePlayerId: room.players[room.turnIndex].id, 
+        activePlayerName: room.players[room.turnIndex].name 
+      });
     } else if (targetPhase === 'askContinue') {
-      // Prompt all players to vote on whether to add another round
       room.continueVotes = {};
       io.to(roomCode).emit('promptContinueVote');
     } else if (targetPhase === 'vote') {
@@ -138,11 +167,10 @@ io.on('connection', (socket) => {
     const room = rooms[roomCode];
     if (!room) return;
 
-    room.continueVotes[socket.id] = choice; // 'more' or 'vote'
+    room.continueVotes[socket.id] = choice;
     io.to(roomCode).emit('continueStatusUpdated', room.continueVotes);
 
     if (Object.keys(room.continueVotes).length === room.players.length) {
-      // Check what the majority wanted
       let moreCount = 0;
       let voteCount = 0;
       Object.values(room.continueVotes).forEach(v => {
@@ -151,12 +179,15 @@ io.on('connection', (socket) => {
       });
 
       if (moreCount >= voteCount) {
-        // Add another round dynamic
         room.round++;
+        room.turnIndex = 0;
         room.answers[room.round] = {};
         io.to(roomCode).emit('goToAnswerScreen', room);
+        io.to(roomCode).emit('nextTurnIndex', { 
+          activePlayerId: room.players[room.turnIndex].id, 
+          activePlayerName: room.players[room.turnIndex].name 
+        });
       } else {
-        // Move to final accusation voting
         room.phase = 'vote';
         room.votes = {};
         io.to(roomCode).emit('goToVoteScreen', room);
@@ -199,6 +230,7 @@ io.on('connection', (socket) => {
     room.continueVotes = {};
     room.theNumber = null;
     room.voteTally = null;
+    room.turnIndex = 0;
 
     io.to(roomCode).emit('roomUpdated', room);
   });
@@ -210,5 +242,5 @@ io.on('connection', (socket) => {
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-  console.log(`Server is running smoothly! 🔥`);
+  console.log(`Server running live with turns! 🔥`);
 });
