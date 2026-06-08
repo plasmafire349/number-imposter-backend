@@ -2,6 +2,7 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
+const fs = require('fs');
 
 const app = express();
 const server = http.createServer(app);
@@ -9,12 +10,24 @@ const io = new Server(server);
 
 const PORT = process.env.PORT || 3000;
 
-// Force the server to look inside its own folder for your game assets
+// Serve all static assets from the root directory
 app.use(express.static(__dirname));
 
-// 🌟 FIXED LINE: This points the homepage directly to your original file name!
+// AUTOMATIC FILE FINDER: Finds your HTML game file dynamically
 app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'number-imposter.html'));
+  try {
+    const files = fs.readdirSync(__dirname);
+    // Look for any file that ends with .html
+    const htmlFile = files.find(file => file.toLowerCase().endsWith('.html'));
+    
+    if (htmlFile) {
+      res.sendFile(path.join(__dirname, htmlFile));
+    } else {
+      res.status(404).send("Error: No HTML file found in your GitHub repository!");
+    }
+  } catch (err) {
+    res.status(500).send("Server Error reading directory.");
+  }
 });
 
 // Game State Database stored in memory
@@ -71,7 +84,6 @@ io.on('connection', (socket) => {
 
     socket.join(roomCode);
     socket.emit('roomUpdated', rooms[roomCode]);
-    console.log(`Room created: ${roomCode} by ${playerName}`);
   });
 
   // 2. JOIN ROOM
@@ -89,7 +101,6 @@ io.on('connection', (socket) => {
     room.players.push({ id: socket.id, name: playerName });
     socket.join(code);
     io.to(code).emit('roomUpdated', room);
-    console.log(`${playerName} joined room ${code}`);
   });
 
   // 3. START GAME
@@ -330,7 +341,6 @@ io.on('connection', (socket) => {
 
   // CLEAN UP ON LEAVE
   socket.on('disconnect', () => {
-    console.log(`User disconnected: ${socket.id}`);
     Object.keys(rooms).forEach(code => {
       const room = rooms[code];
       const index = room.players.findIndex(p => p.id === socket.id);
@@ -350,5 +360,5 @@ io.on('connection', (socket) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`Number Imposter Server is live on http://localhost:${PORT}`);
+  console.log(`Number Imposter Server is live on port ${PORT}`);
 });
