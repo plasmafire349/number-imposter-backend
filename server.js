@@ -107,18 +107,17 @@ io.on('connection', (socket) => {
     io.to(roomCode).emit('readyListUpdated', room.readyPlayers);
 
     if (Object.keys(room.readyPlayers).length === room.players.length) {
-      room.phase = 'turnReveal'; // Route to the new presentation page
+      room.phase = 'turnReveal';
       room.readyPlayers = {}; 
       room.turnIndex = 0;
       
-      // Shuffle ONCE here. This order is locked for the entire round.
       room.turnOrder = shuffleArray(room.players);
       
       io.to(roomCode).emit('goToTurnRevealScreen', room);
     }
   });
 
-  // NEW: HOST PROCEEDS FROM REVEAL TO ACTUAL INPUT
+  // HOST PROCEEDS FROM REVEAL TO ACTUAL INPUT
   socket.on('startAnswering', ({ roomCode }) => {
     const room = rooms[roomCode];
     if (!room || room.hostId !== socket.id) return;
@@ -131,19 +130,27 @@ io.on('connection', (socket) => {
     });
   });
 
-  // 5. PLAYER SUBMITS WORD CLUE 
+  // 5. PLAYER SUBMITS WORD CLUE (HARDCODED SINGLE ANSWER PER ROUND PROTECTION)
   socket.on('submitClue', ({ roomCode, clueWord }) => {
     const room = rooms[roomCode];
     if (!room || room.phase !== 'answer') return;
 
-    const currentExpectedPlayer = room.turnOrder[room.turnIndex];
-    if (!currentExpectedPlayer || socket.id !== currentExpectedPlayer.id) return; 
-
+    // Check if this round's answer tracking object exists
     if (!room.answers[room.round]) {
       room.answers[room.round] = {};
     }
 
-    // Lock in the answer
+    // CRITICAL HARDCODED GUARD: If player has already answered this round, reject completely
+    if (room.answers[room.round][socket.id] !== undefined) {
+      console.log(`Blocked duplicate submission attempt from player: ${socket.id}`);
+      return;
+    }
+
+    // Verify it is actually this player's turned based on index assignment
+    const currentExpectedPlayer = room.turnOrder[room.turnIndex];
+    if (!currentExpectedPlayer || socket.id !== currentExpectedPlayer.id) return; 
+
+    // Lock in the answer permanently for this round
     room.answers[room.round][socket.id] = clueWord;
     
     io.to(roomCode).emit('clueRevealedLive', {
@@ -153,7 +160,7 @@ io.on('connection', (socket) => {
       roundAnswers: room.answers[room.round]
     });
 
-    // Step strictly to the next player in the locked array
+    // Advance turn sequence safely
     room.turnIndex++;
 
     if (room.turnIndex < room.turnOrder.length) {
@@ -176,7 +183,7 @@ io.on('connection', (socket) => {
       room.turnIndex = 0;
       room.answers[2] = {};
       room.phase = 'turnReveal';
-      room.turnOrder = shuffleArray(room.players); // New random order for round 2
+      room.turnOrder = shuffleArray(room.players);
       io.to(roomCode).emit('goToTurnRevealScreen', room);
     } else if (targetPhase === 'askContinue') {
       room.continueVotes = {};
@@ -209,7 +216,7 @@ io.on('connection', (socket) => {
         room.turnIndex = 0;
         room.answers[room.round] = {};
         room.phase = 'turnReveal';
-        room.turnOrder = shuffleArray(room.players); // New random order for extended round
+        room.turnOrder = shuffleArray(room.players);
         io.to(roomCode).emit('goToTurnRevealScreen', room);
       } else {
         room.phase = 'vote';
@@ -313,5 +320,5 @@ io.on('connection', (socket) => {
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-  console.log(`Server running live with locked turn ordering structures! 🔥`);
+  console.log(`Server running live with hardcoded round submission constraints! 🔥`);
 });
