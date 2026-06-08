@@ -1,5 +1,6 @@
 const express = require('express');
 const http = require('http');
+const path = require('path');
 const { Server } = require('socket.io');
 
 const app = express();
@@ -10,6 +11,25 @@ const io = new Server(server, {
 });
 
 const rooms = {};
+
+// ─── PWA AND FRONTEND CONTENT DELIVERY ROUTING ───
+
+// Delivers the main game interface when anyone visits the site base URL
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'number-imposter.html'));
+});
+
+// Delivers the application manifest configuration layout 
+app.get('/manifest.json', (req, res) => {
+  res.sendFile(path.join(__dirname, 'manifest.json'));
+});
+
+// Delivers the system background service worker execution code
+app.get('/service-worker.js', (req, res) => {
+  res.sendFile(path.join(__dirname, 'service-worker.js'));
+});
+
+// ─── GAME ARCHITECTURE FUNCTIONS ───
 
 function generateRoomCode() {
   return Math.random().toString(36).substring(2, 6).toUpperCase();
@@ -35,6 +55,8 @@ function cleanDuplicatePlayers(playersArray) {
   });
   return Object.values(uniqueMap);
 }
+
+// ─── CLIENT SOCKET WORKFLOW ───
 
 io.on('connection', (socket) => {
   console.log(`Player connected: ${socket.id}`);
@@ -187,7 +209,6 @@ io.on('connection', (socket) => {
 
     room.players = cleanDuplicatePlayers(room.players);
 
-    // Handles moving into an emergency tie-breaker or round 2 transition
     if (targetPhase === 'round2' || targetPhase === 'tiebreakerRound') {
       room.round++;
       room.turnIndex = 0; 
@@ -266,16 +287,14 @@ io.on('connection', (socket) => {
         }
       });
 
-      // FIXED TIE-BREAKER INTERCEPT BLOCK:
       if (tie) {
         room.phase = 'result';
-        room.tieBreakerActive = true; // Alerts frontend to present tie screen layout
+        room.tieBreakerActive = true; 
         room.gameOverReason = "🚨 VOTE TIE ENCOUNTERED! Commencing emergency tie-breaker round...";
         io.to(roomCode).emit('goToResultScreen', room);
         return;
       }
 
-      // Normal end of match evaluation (No tie)
       room.phase = 'result';
       room.tieBreakerActive = false;
       const imposter = room.players.find(p => room.roles[p.id] === 'imposter');
@@ -342,5 +361,5 @@ io.on('connection', (socket) => {
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-  console.log(`Server running with tie-breaker systems! 🚨`);
+  console.log(`Server running and delivering standalone client files on Port ${PORT}! 🚨`);
 });
