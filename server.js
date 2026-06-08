@@ -12,21 +12,9 @@ const io = new Server(server, {
 
 const rooms = {};
 
-// ─── PWA AND FRONTEND CONTENT DELIVERY ROUTING ───
-
-// Delivers the main game interface when anyone visits the site base URL
+// Direct asset pipeline targeting the index interface
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'number-imposter.html'));
-});
-
-// Delivers the application manifest configuration layout 
-app.get('/manifest.json', (req, res) => {
-  res.sendFile(path.join(__dirname, 'manifest.json'));
-});
-
-// Delivers the system background service worker execution code
-app.get('/service-worker.js', (req, res) => {
-  res.sendFile(path.join(__dirname, 'service-worker.js'));
 });
 
 // ─── GAME ARCHITECTURE FUNCTIONS ───
@@ -197,7 +185,7 @@ io.on('connection', (socket) => {
       io.to(roomCode).emit('nextTurnIndex', { 
         activePlayerId: room.turnOrder[room.turnIndex].id, 
         activePlayerName: room.turnOrder[room.turnIndex].name 
-      });
+    });
     } else {
       io.to(roomCode).emit('showAllClues', room);
     }
@@ -361,5 +349,5 @@ io.on('connection', (socket) => {
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-  console.log(`Server running and delivering standalone client files on Port ${PORT}! 🚨`);
+  console.log(`Server running on Port ${PORT}! 🚨`);
 });
