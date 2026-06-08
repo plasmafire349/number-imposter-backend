@@ -74,8 +74,7 @@ io.on('connection', (socket) => {
       votes: {},
       tieBreakerActive: false,
       failedImposterGuess: null,
-      gameOverReason: "",
-      messages: []
+      gameOverReason: ""
     };
 
     socket.join(roomCode);
@@ -97,20 +96,6 @@ io.on('connection', (socket) => {
     room.players.push({ id: socket.id, name: playerName });
     socket.join(code);
     io.to(code).emit('roomUpdated', room);
-  });
-
-  // CHAT MESSAGE FEATURE
-  socket.on('sendChatMessage', ({ roomCode, playerName, message }) => {
-    const code = roomCode.toUpperCase();
-    const room = rooms[code];
-    if (!room) return;
-
-    const chatMsg = { sender: playerName, text: message };
-    room.messages.push(chatMsg);
-
-    if (room.messages.length > 50) room.messages.shift();
-
-    io.to(code).emit('chatMessageReceived', chatMsg);
   });
 
   // 3. START GAME
@@ -152,7 +137,7 @@ io.on('connection', (socket) => {
     const allReady = room.players.every(p => room.readyPlayers[p.id]);
     if (allReady) {
       room.phase = 'turnReveal';
-      // Locks the turn order in Round 1
+      // Sets the order here for Round 1
       room.turnOrder = shuffleArray(room.players);
       io.to(room.code).emit('goToTurnRevealScreen', room);
     }
@@ -344,7 +329,6 @@ io.on('connection', (socket) => {
     room.tieBreakerActive = false;
     room.failedImposterGuess = null;
     room.gameOverReason = "";
-    room.messages = [];
 
     io.to(room.code).emit('roomUpdated', room);
   });
