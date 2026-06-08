@@ -10,14 +10,12 @@ const io = new Server(server);
 
 const PORT = process.env.PORT || 3000;
 
-// Serve all static assets from the root directory
 app.use(express.static(__dirname));
 
 // AUTOMATIC FILE FINDER: Finds your HTML game file dynamically
 app.get('/', (req, res) => {
   try {
     const files = fs.readdirSync(__dirname);
-    // Look for any file that ends with .html
     const htmlFile = files.find(file => file.toLowerCase().endsWith('.html'));
     
     if (htmlFile) {
@@ -30,10 +28,8 @@ app.get('/', (req, res) => {
   }
 });
 
-// Game State Database stored in memory
 const rooms = {};
 
-// Helper function to generate random 4-letter room codes
 function generateRoomCode() {
   const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
   let code = '';
@@ -43,7 +39,6 @@ function generateRoomCode() {
   return code;
 }
 
-// Helper to shuffle arrays (Fisher-Yates)
 function shuffleArray(array) {
   const copy = [...array];
   for (let i = copy.length - 1; i > 0; i--) {
@@ -79,7 +74,8 @@ io.on('connection', (socket) => {
       votes: {},
       tieBreakerActive: false,
       failedImposterGuess: null,
-      gameOverReason: ""
+      gameOverReason: "",
+      messages: [] // Chat history for this room
     };
 
     socket.join(roomCode);
@@ -101,6 +97,21 @@ io.on('connection', (socket) => {
     room.players.push({ id: socket.id, name: playerName });
     socket.join(code);
     io.to(code).emit('roomUpdated', room);
+  });
+
+  // CHAT MESSAGE FEATURE
+  socket.on('sendChatMessage', ({ roomCode, playerName, message }) => {
+    const code = roomCode.toUpperCase();
+    const room = rooms[code];
+    if (!room) return;
+
+    const chatMsg = { sender: playerName, text: message };
+    room.messages.push(chatMsg);
+
+    // Keep only last 50 messages to save memory
+    if (room.messages.length > 50) room.messages.shift();
+
+    io.to(code).emit('chatMessageReceived', chatMsg);
   });
 
   // 3. START GAME
@@ -142,6 +153,7 @@ io.on('connection', (socket) => {
     const allReady = room.players.every(p => room.readyPlayers[p.id]);
     if (allReady) {
       room.phase = 'turnReveal';
+      // Locks the initial turn order here for Round 1
       room.turnOrder = shuffleArray(room.players);
       io.to(room.code).emit('goToTurnRevealScreen', room);
     }
@@ -205,7 +217,7 @@ io.on('connection', (socket) => {
 
     if (targetPhase === 'round2') {
       room.round = 2;
-      room.turnOrder = shuffleArray(room.players);
+      // FIX: Removed shuffleArray. Reuses the exact same turnOrder array as Round 1.
       io.to(room.code).emit('goToTurnRevealScreen', room);
     } 
     else if (targetPhase === 'askContinue') {
@@ -219,7 +231,7 @@ io.on('connection', (socket) => {
     else if (targetPhase === 'tiebreakerRound') {
       room.tieBreakerActive = true;
       room.round++;
-      room.turnOrder = shuffleArray(room.players);
+      // FIX: Removed shuffleArray. Retains turn order for tiebreakers.
       io.to(room.code).emit('goToTurnRevealScreen', room);
     }
   });
@@ -243,7 +255,7 @@ io.on('connection', (socket) => {
 
       if (moreCount >= voteCount) {
         room.round++;
-        room.turnOrder = shuffleArray(room.players);
+        // FIX: Removed shuffleArray so turn order is maintained in extended rounds.
         io.to(room.code).emit('goToTurnRevealScreen', room);
       } else {
         room.votes = {};
@@ -335,11 +347,11 @@ io.on('connection', (socket) => {
     room.tieBreakerActive = false;
     room.failedImposterGuess = null;
     room.gameOverReason = "";
+    room.messages = []; // Clear chat on reset
 
     io.to(room.code).emit('roomUpdated', room);
   });
 
-  // CLEAN UP ON LEAVE
   socket.on('disconnect', () => {
     Object.keys(rooms).forEach(code => {
       const room = rooms[code];
