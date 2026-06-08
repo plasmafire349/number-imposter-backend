@@ -15,12 +15,11 @@ function generateRoomCode() {
   return Math.random().toString(36).substring(2, 6).toUpperCase();
 }
 
-// FIXED: Standard, uncorrupted Fisher-Yates shuffle
+// Standard Fisher-Yates shuffle used ONLY for the initial Round 1 lineup
 function shuffleArray(array) {
   const arr = [...array];
   for (let i = arr.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
-    // Correct index swapping swaps array elements cleanly
     const temp = arr[i];
     arr[i] = arr[j];
     arr[j] = temp;
@@ -28,7 +27,6 @@ function shuffleArray(array) {
   return arr;
 }
 
-// Strict helper to guarantee no ghost duplicates exist in the roster
 function cleanDuplicatePlayers(playersArray) {
   const uniqueMap = {};
   playersArray.forEach(p => {
@@ -82,7 +80,6 @@ io.on('connection', (socket) => {
       return;
     }
 
-    // Erase any dead duplicate connections instantly
     room.players = room.players.filter(p => p.id !== socket.id && p.name !== playerName);
 
     socket.join(code);
@@ -120,7 +117,7 @@ io.on('connection', (socket) => {
     io.to(roomCode).emit('goToRoleScreen', room);
   });
 
-  // 4. PLAYER CLICKS "READY" -> Renders Lineup Page
+  // 4. PLAYER CLICKS "READY" -> Generates the core lineup order
   socket.on('playerReady', ({ roomCode }) => {
     const room = rooms[roomCode];
     if (!room) return;
@@ -135,7 +132,7 @@ io.on('connection', (socket) => {
       room.readyPlayers = {}; 
       room.turnIndex = 0;
       
-      // Shuffle distinct players array safely using the fixed algorithm
+      // Order is locked here randomly once!
       room.turnOrder = shuffleArray(room.players);
       
       io.to(roomCode).emit('goToTurnRevealScreen', room);
@@ -150,14 +147,13 @@ io.on('connection', (socket) => {
     room.phase = 'answer';
     io.to(roomCode).emit('goToAnswerScreen', room);
     
-    // Call out Player 1 (Index 0)
     io.to(roomCode).emit('nextTurnIndex', { 
       activePlayerId: room.turnOrder[room.turnIndex].id, 
       activePlayerName: room.turnOrder[room.turnIndex].name 
     });
   });
 
-  // 5. TURN BY TURN SUBMISSION (Player 1 -> Player 2 -> Player 3)
+  // 5. TURN BY TURN SUBMISSION
   socket.on('submitClue', ({ roomCode, clueWord }) => {
     const room = rooms[roomCode];
     if (!room || room.phase !== 'answer') return;
@@ -166,10 +162,8 @@ io.on('connection', (socket) => {
       room.answers[room.round] = {};
     }
 
-    // Hardcoded stop block to eliminate double submissions
     if (room.answers[room.round][socket.id] !== undefined) return; 
 
-    // Verification check: Is it actually this player's exact sequence slot?
     const currentExpectedPlayer = room.turnOrder[room.turnIndex];
     if (!currentExpectedPlayer || socket.id !== currentExpectedPlayer.id) return; 
 
@@ -182,17 +176,14 @@ io.on('connection', (socket) => {
       roundAnswers: room.answers[room.round]
     });
 
-    // Move to next player in numerical line
     room.turnIndex++;
 
     if (room.turnIndex < room.turnOrder.length) {
-      // Prompt Player 2, then Player 3...
       io.to(roomCode).emit('nextTurnIndex', { 
         activePlayerId: room.turnOrder[room.turnIndex].id, 
         activePlayerName: room.turnOrder[room.turnIndex].name 
       });
     } else {
-      // Everyone has gone exactly once
       io.to(roomCode).emit('showAllClues', room);
     }
   });
@@ -206,10 +197,10 @@ io.on('connection', (socket) => {
 
     if (targetPhase === 'round2') {
       room.round = 2;
-      room.turnIndex = 0;
+      room.turnIndex = 0; // Reset index back to Player 1
       room.answers[2] = {};
       room.phase = 'turnReveal';
-      room.turnOrder = shuffleArray(room.players);
+      // FIXED: Shuffling line removed here to lock original order
       io.to(roomCode).emit('goToTurnRevealScreen', room);
     } else if (targetPhase === 'askContinue') {
       room.continueVotes = {};
@@ -241,10 +232,10 @@ io.on('connection', (socket) => {
 
       if (moreCount >= voteCount) {
         room.round++;
-        room.turnIndex = 0;
+        room.turnIndex = 0; // Reset index back to Player 1
         room.answers[room.round] = {};
         room.phase = 'turnReveal';
-        room.turnOrder = shuffleArray(room.players);
+        // FIXED: Shuffling line removed here to lock original order
         io.to(roomCode).emit('goToTurnRevealScreen', room);
       } else {
         room.phase = 'vote';
@@ -350,5 +341,5 @@ io.on('connection', (socket) => {
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-  console.log(`Server running with fixed Fisher-Yates shuffle order engine! 🔥`);
+  console.log(`Server running with fixed permanent order lineup engine! 🔒`);
 });
