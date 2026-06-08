@@ -25,7 +25,6 @@
       width: 100%;
       max-width: 500px;
       box-shadow: 0px 4px 10px rgba(255, 255, 255, 0.1);
-      margin-bottom: 20px;
     }
     .screen { display: none; }
     .screen.active { display: block; }
@@ -57,42 +56,6 @@
       margin: 20px 0;
     }
     .secret-box.crew { background-color: #5cb85c; }
-    
-    /* Live Room Chat Container Panel Style */
-    .chat-container {
-      width: 100%;
-      max-width: 500px;
-      background: #1e1e1e;
-      border-radius: 10px;
-      box-shadow: 0px 4px 10px rgba(255, 255, 255, 0.1);
-      overflow: hidden;
-      display: none;
-      flex-direction: column;
-    }
-    .chat-header {
-      background: #2a2a2a;
-      padding: 10px;
-      font-weight: bold;
-      color: #007bff;
-      border-bottom: 1px solid #333;
-      text-align: left;
-    }
-    .chat-logs {
-      height: 120px;
-      padding: 10px;
-      overflow-y: auto;
-      background: #121212;
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-      text-align: left;
-      font-size: 14px;
-    }
-    .chat-msg { word-break: break-word; }
-    .chat-msg .sender { color: #ffca28; font-weight: bold; margin-right: 5px; }
-    .chat-input-area { display: flex; border-top: 1px solid #333; }
-    .chat-input-area input { flex: 1; margin: 0; border-radius: 0; background: #1e1e1e; padding: 10px; }
-    .chat-input-area button { width: auto; margin: 0; border-radius: 0; padding: 0 20px; background-color: #007bff; }
   </style>
 </head>
 <body>
@@ -184,15 +147,6 @@
     </div>
   </div>
 
-  <div class="chat-container" id="global-chat-panel">
-    <div class="chat-header">Room Chat</div>
-    <div class="chat-logs" id="chat-logs"></div>
-    <div class="chat-input-area">
-      <input type="text" id="input-chat-msg" placeholder="Type a message..." maxlength="80">
-      <button id="btn-send-chat">Send</button>
-    </div>
-  </div>
-
   <script>
     const socket = io();
     let myName = "";
@@ -204,12 +158,6 @@
     function showScreen(screenId) {
       document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
       $(screenId).classList.add('active');
-      
-      if(screenId !== 'screen-login') {
-        $('global-chat-panel').style.display = 'flex';
-      } else {
-        $('global-chat-panel').style.display = 'none';
-      }
     }
 
     $('btn-create').onclick = () => {
@@ -227,28 +175,6 @@
       myRoomCode = code;
       socket.emit('joinRoom', { roomCode: code, playerName: name });
     };
-
-    function executeChatSend() {
-      const msg = $('input-chat-msg').value.trim();
-      if(!msg) return;
-      socket.emit('sendChatMessage', {
-        roomCode: myRoomCode,
-        playerName: myName,
-        message: msg
-      });
-      $('input-chat-msg').value = "";
-    }
-    $('btn-send-chat').onclick = executeChatSend;
-    $('input-chat-msg').onkeypress = (e) => { if(e.key === 'Enter') executeChatSend(); };
-
-    socket.on('chatMessageReceived', (msgObj) => {
-      const log = $('chat-logs');
-      const msgEl = document.createElement('div');
-      msgEl.className = "chat-msg";
-      msgEl.innerHTML = `<span class="sender">${msgObj.sender}:</span><span>${msgObj.text}</span>`;
-      log.appendChild(msgEl);
-      log.scrollTop = log.scrollHeight;
-    });
 
     socket.on('roomUpdated', (room) => {
       currentRoomState = room;
