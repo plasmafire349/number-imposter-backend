@@ -24,6 +24,17 @@ function shuffleArray(array) {
   return arr;
 }
 
+// Helper function to force unique players by ID
+function cleanDuplicatePlayers(playersArray) {
+  const uniqueMap = {};
+  playersArray.forEach(p => {
+    if (p && p.id) {
+      uniqueMap[p.id] = p;
+    }
+  });
+  return Object.values(uniqueMap);
+}
+
 io.on('connection', (socket) => {
   console.log(`Player connected: ${socket.id}`);
 
@@ -53,7 +64,7 @@ io.on('connection', (socket) => {
     socket.emit('roomUpdated', rooms[code]);
   });
 
-  // 2. PLAYER JOINS LOBBY
+  // 2. PLAYER JOINS LOBBY (FIXED ANTI-DUPLICATION FILTER)
   socket.on('joinRoom', ({ roomCode, playerName }) => {
     const code = roomCode.toUpperCase();
     const room = rooms[code];
@@ -67,11 +78,15 @@ io.on('connection', (socket) => {
       return;
     }
 
-    // Clean up any existing dead connections with the exact same name or ID first
+    // Strip out any pre-existing ghost connections with this socket ID or player name first
     room.players = room.players.filter(p => p.id !== socket.id && p.name !== playerName);
 
     socket.join(code);
     room.players.push({ id: socket.id, name: playerName });
+    
+    // Clean array structural state completely before broadcasting
+    room.players = cleanDuplicatePlayers(room.players);
+    
     io.to(code).emit('roomUpdated', room);
   });
 
@@ -79,6 +94,8 @@ io.on('connection', (socket) => {
   socket.on('startGame', ({ roomCode }) => {
     const room = rooms[roomCode];
     if (!room || room.hostId !== socket.id) return;
+
+    room.players = cleanDuplicatePlayers(room.players);
 
     room.phase = 'role';
     room.round = 1;
@@ -109,18 +126,15 @@ io.on('connection', (socket) => {
     room.readyPlayers[socket.id] = true;
     io.to(roomCode).emit('readyListUpdated', room.readyPlayers);
 
-    // Check readiness against unique players only
-    const uniquePlayersMap = {};
-    room.players.forEach(p => { uniquePlayersMap[p.id] = p; });
-    const uniquePlayersList = Object.values(uniquePlayersMap);
+    room.players = cleanDuplicatePlayers(room.players);
 
-    if (Object.keys(room.readyPlayers).length >= uniquePlayersList.length) {
+    if (Object.keys(room.readyPlayers).length >= room.players.length) {
       room.phase = 'turnReveal';
       room.readyPlayers = {}; 
       room.turnIndex = 0;
       
-      // CRITICAL HARDCODE: Shuffle ONLY the unique list of filtered players
-      room.turnOrder = shuffleArray(uniquePlayersList);
+      // Shuffle the fully distinct array list
+      room.turnOrder = shuffleArray(room.players);
       
       io.to(roomCode).emit('goToTurnRevealScreen', room);
     }
@@ -149,7 +163,7 @@ io.on('connection', (socket) => {
     }
 
     if (room.answers[room.round][socket.id] !== undefined) {
-      return; // Stop duplicate inputs
+      return; 
     }
 
     const currentExpectedPlayer = room.turnOrder[room.turnIndex];
@@ -181,17 +195,14 @@ io.on('connection', (socket) => {
     const room = rooms[roomCode];
     if (!room || room.hostId !== socket.id) return;
 
-    // Filter unique array tracking structures
-    const uniquePlayersMap = {};
-    room.players.forEach(p => { uniquePlayersMap[p.id] = p; });
-    const uniquePlayersList = Object.values(uniquePlayersMap);
+    room.players = cleanDuplicatePlayers(room.players);
 
     if (targetPhase === 'round2') {
       room.round = 2;
       room.turnIndex = 0;
       room.answers[2] = {};
       room.phase = 'turnReveal';
-      room.turnOrder = shuffleArray(uniquePlayersList);
+      room.turnOrder = shuffleArray(room.players);
       io.to(roomCode).emit('goToTurnRevealScreen', room);
     } else if (targetPhase === 'askContinue') {
       room.continueVotes = {};
@@ -211,11 +222,9 @@ io.on('connection', (socket) => {
     room.continueVotes[socket.id] = choice;
     io.to(roomCode).emit('continueStatusUpdated', room.continueVotes);
 
-    const uniquePlayersMap = {};
-    room.players.forEach(p => { uniquePlayersMap[p.id] = p; });
-    const uniquePlayersList = Object.values(uniquePlayersMap);
+    room.players = cleanDuplicatePlayers(room.players);
 
-    if (Object.keys(room.continueVotes).length >= uniquePlayersList.length) {
+    if (Object.keys(room.continueVotes).length >= room.players.length) {
       let moreCount = 0;
       let voteCount = 0;
       Object.values(room.continueVotes).forEach(v => {
@@ -228,7 +237,7 @@ io.on('connection', (socket) => {
         room.turnIndex = 0;
         room.answers[room.round] = {};
         room.phase = 'turnReveal';
-        room.turnOrder = shuffleArray(uniquePlayersList);
+        room.turnOrder = shuffleArray(room.players);
         io.to(roomCode).emit('goToTurnRevealScreen', room);
       } else {
         room.phase = 'vote';
@@ -246,21 +255,19 @@ io.on('connection', (socket) => {
     room.votes[socket.id] = targetPlayerId;
     io.to(roomCode).emit('voteStatusUpdated', room.votes);
 
-    const uniquePlayersMap = {};
-    room.players.forEach(p => { uniquePlayersMap[p.id] = p; });
-    const uniquePlayersList = Object.values(uniquePlayersMap);
+    room.players = cleanDuplicatePlayers(room.players);
 
-    if (Object.keys(room.votes).length >= uniquePlayersList.length) {
+    if (Object.keys(room.votes).length >= room.players.length) {
       room.phase = 'result';
       const tally = {};
-      uniquePlayersList.forEach(p => tally[p.id] = 0);
+      room.players.forEach(p => tally[p.id] = 0);
       Object.values(room.votes).forEach(target => {
         if (tally[target] !== undefined) tally[target]++;
       });
       room.voteTally = tally;
 
-      const imposter = uniquePlayersList.find(p => room.roles[p.id] === 'imposter');
-      let highestVotedId = uniquePlayersList[0]?.id || socket.id;
+      const imposter = room.players.find(p => room.roles[p.id] === 'imposter');
+      let highestVotedId = room.players[0]?.id || socket.id;
       let maxVotes = -1;
       let tie = false;
 
@@ -331,11 +338,10 @@ io.on('connection', (socket) => {
 
   socket.on('disconnect', () => {
     console.log(`Player disconnected: ${socket.id}`);
-    // Optional: Clean empty rooms here if needed
   });
 });
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-  console.log(`Server live with absolute deduplicated turn-lineup validation! 🔥`);
+  console.log(`Server live with absolute array level deduplication! 🔥`);
 });
