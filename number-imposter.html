@@ -4,7 +4,6 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Number Imposter</title>
-  <script src="/socket.io/socket.io.js"></script>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -39,7 +38,7 @@
     input { background-color: #333; color: white; }
     button { background-color: #007bff; color: white; cursor: pointer; }
     button:hover { background-color: #0056b3; }
-    .player-list, .clue-list, .vote-list {
+    .player-list, .clue-list, .vote-list, .answers-grid, .vote-grid, .vote-results {
       background-color: #2a2a2a;
       padding: 10px;
       border-radius: 5px;
@@ -47,349 +46,544 @@
       width: 90%;
       text-align: left;
     }
-    .secret-box {
+    .card {
+      margin-bottom: 15px;
+    }
+    .card-title {
+      font-weight: bold;
+      margin-bottom: 8px;
+    }
+    .secret-box, .role-card {
       background-color: #d9534f;
       padding: 15px;
       font-size: 18px;
       font-weight: bold;
       border-radius: 5px;
-      margin: 20px 0;
+      margin: 20px auto;
+      width: 90%;
     }
-    .secret-box.crew { background-color: #5cb85c; }
+    .secret-box.crew, .role-card.crewmate { background-color: #5cb85c; }
+    .hud-badge {
+      background-color: #5cb85c;
+      padding: 10px;
+      border-radius: 5px;
+      margin-bottom: 15px;
+      font-weight: bold;
+    }
+    .turn-banner {
+      background-color: #333;
+      padding: 10px;
+      border-radius: 5px;
+      margin-bottom: 15px;
+      font-weight: bold;
+    }
+    .order-item {
+      padding: 8px 0;
+      border-bottom: 1px solid #444;
+    }
+    .answer-card {
+      background: #333;
+      padding: 8px;
+      margin: 5px 0;
+      border-radius: 4px;
+    }
+    .answer-player {
+      font-size: 12px;
+      color: #aaa;
+    }
+    .answer-text {
+      font-weight: bold;
+    }
+    .vote-btn {
+      background: #007bff;
+      color: white;
+      padding: 10px;
+      margin: 5px 0;
+      border-radius: 5px;
+      cursor: pointer;
+      text-align: center;
+    }
+    .vote-btn.selected {
+      background: #e879f9;
+    }
+    .vote-btn.disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+    .vote-bar {
+      display: flex;
+      justify-content: space-between;
+      padding: 5px 0;
+    }
+    .imposter-shortcut-bar {
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      background: #1f0813;
+      border-top: 2px solid #f43f5e;
+      padding: 10px;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
+    .imposter-shortcut-bar input { width: 100px; }
+    .imposter-shortcut-bar button { width: auto; }
+    .player-answered { color: #5cb85c; }
+    .player-waiting { color: #f59e0b; }
+    .guess-reveal-badge { color: #f43f5e; font-weight: bold; margin-top: 10px; }
+    .flex-row { display: flex; gap: 10px; justify-content: center; width: 90%; margin: 0 auto; }
+    .flex-row input, .flex-row button { width: 100%; }
+    .mt-12, .mt-16, .mt-20 { margin-top: 10px; }
+    .mb-8 { margin-bottom: 8px; }
+    .text-center { text-align: center; }
+    .btn-full { width: 100%; }
   </style>
 </head>
 <body>
 
-  <div class="game-container">
-    <h1>Number Imposter</h1>
+<div class="stars" id="stars"></div>
 
-    <div id="screen-login" class="screen active">
-      <input type="text" id="input-name" placeholder="Enter your name">
-      <button id="btn-create">Create Room</button>
-      <input type="text" id="input-code" placeholder="Enter Room Code" style="text-transform: uppercase;">
-      <button id="btn-join">Join Room</button>
-    </div>
+<div class="game-container" id="app">
 
-    <div id="screen-lobby" class="screen">
-      <h2>Room Code: <span id="display-room-code">-</span></h2>
-      <div class="player-list" id="lobby-player-list"></div>
-      <button id="btn-start-game" style="display:none;">Start Game</button>
-      <p id="lobby-wait-text">Waiting for host to start...</p>
-    </div>
+  <div class="hud-badge" id="crewmate-persistent-hud">YOUR NUMBER: <span id="hud-number-slot">—</span></div>
 
-    <div id="screen-role" class="screen">
-      <h2>Your Role</h2>
-      <div id="role-box" class="secret-box">Loading...</div>
-      <button id="btn-ready">Ready</button>
-      <div id="ready-status-box" style="margin-top:10px;">Ready: 0/0</div>
-    </div>
+  <div class="screen active" id="screen-lobby">
+    <h1>NUMBER IMPOSTER</h1>
+    <p class="mb-8">multiplayer deduction game</p>
 
-    <div id="screen-turn-reveal" class="screen">
-      <h2>Round <span id="display-round-num">1</span> Turn Order</h2>
-      <div class="player-list" id="turn-order-list"></div>
-      <button id="btn-host-start-clues" style="display:none;">Start Clues</button>
-      <p id="turn-wait-text">Waiting for host...</p>
-    </div>
-
-    <div id="screen-answer" class="screen">
-      <h2>Round <span id="display-answer-round-num">1</span>: Give Clues</h2>
-      <div id="turn-announcement" style="font-size:18px; margin: 10px 0; font-weight:bold;">-</div>
-      
-      <div id="clue-input-wrapper" style="display:none;">
-        <input type="text" id="input-clue-word" placeholder="Enter your clue word">
-        <button id="btn-submit-clue">Submit Clue</button>
+    <div class="card">
+      <div class="card-title">Create Game</div>
+      <div class="mb-8">Your name</div>
+      <input type="text" id="host-name" placeholder="Enter your name..." maxlength="18">
+      <div class="mt-20">
+        <button class="btn btn-primary btn-full" onclick="createGame()">Create Lobby →</button>
       </div>
+    </div>
 
-      <div class="clue-list" id="live-clues-box">
-        <strong>Clues:</strong>
-        <div id="live-clues-list" style="margin-top:5px;"></div>
+    <div class="card text-center" style="padding:20px">
+      <div class="flex-row">
+        <input type="text" id="join-code" placeholder="ROOM CODE" maxlength="4" style="text-transform:uppercase;letter-spacing:3px">
+        <input type="text" id="join-name" placeholder="Your name" maxlength="18" style="width:130px;flex-shrink:0">
       </div>
-
-      <button id="btn-host-clue-done" style="display:none;">Done</button>
-    </div>
-
-    <div id="screen-review" class="screen">
-      <h2>Review Clues</h2>
-      <div class="clue-list" id="review-clues-list"></div>
-      
-      <div id="imposter-guess-wrapper" style="display:none; background:#222; padding:10px; border-radius:5px; margin-bottom:10px;">
-        <h3>Imposter Guess</h3>
-        <input type="number" id="input-imposter-guess" placeholder="Guess the number (1-10)" min="1" max="10">
-        <button id="btn-imposter-guess">Submit Guess</button>
-      </div>
-
-      <div id="host-review-controls" style="display:none;">
-        <button id="btn-advance-round2">Go to Round 2</button>
-        <button id="btn-advance-decision">Go to Vote</button>
-      </div>
-      <p id="review-wait-text">Waiting for host...</p>
-    </div>
-
-    <div id="screen-prompt-continue" class="screen">
-      <h2>What do you want to do?</h2>
-      <button id="btn-vote-more">More Clues</button>
-      <button id="btn-vote-exile">Vote to Exile</button>
-      <div id="continue-tally-box" style="margin-top:10px;">Voted: 0</div>
-    </div>
-
-    <div id="screen-vote" class="screen">
-      <h2>Vote to Exile</h2>
-      <div class="vote-list" id="voting-options-box"></div>
-      <div id="vote-tally-box" style="margin-top:10px;">Voted: 0</div>
-    </div>
-
-    <div id="screen-result" class="screen">
-      <h2>Game Over</h2>
-      <h3 id="display-game-result">-</h3>
-      <div class="player-list" id="final-reveal-box"></div>
-      <button id="btn-play-again" style="display:none;">Play Again</button>
-      <p id="result-wait-text">Waiting for host...</p>
+      <button class="btn btn-secondary btn-full mt-12" onclick="joinGame()">Join Game</button>
     </div>
   </div>
 
-  <script>
-    const socket = io();
-    let myName = "";
-    let myRoomCode = "";
-    let currentRoomState = null;
+  <div class="screen" id="screen-waiting">
+    <div class="card">
+      <div class="card-title">Room Code</div>
+      <div style="font-size:2.8rem; font-weight:bold; letter-spacing:8px;" id="display-code">—</div>
+    </div>
 
-    const $ = id => document.getElementById(id);
+    <div class="card">
+      <div class="card-title">Players <span style="font-size:0.8rem;margin-left:auto" id="player-count-label">0 joined</span></div>
+      <div class="player-list" id="waiting-players"></div>
+    </div>
 
-    function showScreen(screenId) {
-      document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-      $(screenId).classList.add('active');
-    }
+    <div id="host-controls" style="display:none">
+      <button class="btn btn-primary btn-full" onclick="startGame()" id="start-btn">Start Game</button>
+    </div>
+  </div>
 
-    $('btn-create').onclick = () => {
-      const name = $('input-name').value.trim();
-      if(!name) return alert('Enter a name');
-      myName = name;
-      socket.emit('createRoom', { playerName: name });
-    };
+  <div class="screen" id="screen-role">
+    <div id="role-card-container"></div>
+    <div class="card text-center" id="ready-action-card">
+      <button class="btn btn-primary btn-full" onclick="readyForRound()">I'm Ready →</button>
+    </div>
+    <div class="card text-center" id="waiting-ready-card" style="display:none">
+      <div class="player-list" id="ready-players"></div>
+    </div>
+  </div>
 
-    $('btn-join').onclick = () => {
-      const name = $('input-name').value.trim();
-      const code = $('input-code').value.trim().toUpperCase();
-      if(!name || !code) return alert('Enter a name and code');
-      myName = name;
-      myRoomCode = code;
-      socket.emit('joinRoom', { roomCode: code, playerName: name });
-    };
-
-    socket.on('roomUpdated', (room) => {
-      currentRoomState = room;
-      myRoomCode = room.code;
-      $('display-room-code').innerText = room.code;
-
-      if(room.phase === 'lobby') {
-        showScreen('screen-lobby');
-        $('lobby-player-list').innerHTML = room.players.map(p => {
-          const isHost = p.id === room.hostId ? ` (Host)` : '';
-          return `<div style="padding:5px 0;">👤 ${p.name}${isHost}</div>`;
-        }).join('');
-
-        if(socket.id === room.hostId) {
-          $('btn-start-game').style.display = 'block';
-          $('lobby-wait-text').style.display = 'none';
-        } else {
-          $('btn-start-game').style.display = 'none';
-          $('lobby-wait-text').style.display = 'block';
-        }
-      }
-    });
-
-    $('btn-start-game').onclick = () => socket.emit('startGame', { roomCode: myRoomCode });
-
-    socket.on('goToRoleScreen', (room) => {
-      currentRoomState = room;
-      showScreen('screen-role');
-      $('btn-ready').style.display = 'block';
-      $('ready-status-box').innerText = `Ready: 0 / ${room.players.length}`;
-
-      const myRole = room.roles[socket.id];
-      const rBox = $('role-box');
-
-      if(myRole === 'imposter') {
-        rBox.className = "secret-box";
-        rBox.innerText = "You are the IMPOSTER!";
-      } else {
-        rBox.className = "secret-box crew";
-        rBox.innerText = `You are a Crewmate. The Number is: ${room.theNumber}`;
-      }
-    });
-
-    $('btn-ready').onclick = () => {
-      $('btn-ready').style.display = 'none';
-      socket.emit('playerReady', { roomCode: myRoomCode });
-    };
-
-    socket.on('readyListUpdated', (readyMap) => {
-      const total = currentRoomState.players.length;
-      const count = Object.keys(readyMap).length;
-      $('ready-status-box').innerText = `Ready: ${count} / ${total}`;
-    });
-
-    socket.on('goToTurnRevealScreen', (room) => {
-      currentRoomState = room;
-      showScreen('screen-turn-reveal');
-      $('display-round-num').innerText = room.round;
-
-      $('turn-order-list').innerHTML = room.turnOrder.map((p, idx) => {
-        return `<div style="padding:5px 0;">${idx + 1}. ${p.name}</div>`;
-      }).join('');
-
-      if(socket.id === room.hostId) {
-        $('btn-host-start-clues').style.display = 'block';
-        $('turn-wait-text').style.display = 'none';
-      } else {
-        $('btn-host-start-clues').style.display = 'none';
-        $('turn-wait-text').style.display = 'block';
-      }
-    });
-
-    $('btn-host-start-clues').onclick = () => socket.emit('startAnswering', { roomCode: myRoomCode });
-
-    socket.on('goToAnswerScreen', (room) => {
-      currentRoomState = room;
-      showScreen('screen-answer');
-      $('display-answer-round-num').innerText = room.round;
-      $('live-clues-list').innerHTML = '';
-      $('input-clue-word').value = '';
-      $('btn-host-clue-done').style.display = 'none';
-    });
-
-    socket.on('nextTurnIndex', (data) => {
-      $('turn-announcement').innerText = `${data.activePlayerName}'s turn`;
-      if(socket.id === data.activePlayerId) {
-        $('clue-input-wrapper').style.display = 'block';
-      } else {
-        $('clue-input-wrapper').style.display = 'none';
-      }
-    });
-
-    $('btn-submit-clue').onclick = () => {
-      const clue = $('input-clue-word').value.trim();
-      if(!clue) return alert('Enter a clue');
-      $('clue-input-wrapper').style.display = 'none';
-      socket.emit('submitClue', { roomCode: myRoomCode, clueWord: clue });
-    };
-
-    socket.on('clueRevealedLive', (data) => {
-      const item = document.createElement('div');
-      item.innerHTML = `<strong>${data.playerName}:</strong> ${data.clueWord}`;
-      $('live-clues-list').appendChild(item);
-    });
-
-    socket.on('showAllClues', (room) => {
-      currentRoomState = room;
-      $('turn-announcement').innerText = "All clues submitted!";
-      if(socket.id === room.hostId) {
-        $('btn-host-clue-done').style.display = 'block';
-      }
-    });
-
-    $('btn-host-clue-done').onclick = () => {
-      showScreen('screen-review');
-      const rList = $('review-clues-list');
-      rList.innerHTML = '';
+  <div class="screen" id="screen-turn-reveal">
+    <div class="card text-center">
+      <div class="card-title">Turn order (Round <span class="reveal-round-title">1</span>)</div>
+      <p style="font-size:0.85rem;margin-bottom:20px;">Review the order! You can only submit a clue when your number is called.</p>
       
-      Object.keys(currentRoomState.answers).forEach(rNum => {
-        const roundTitle = document.createElement('h4');
-        roundTitle.innerText = `Round ${rNum} Clues:`;
-        rList.appendChild(roundTitle);
-        
-        const ansMap = currentRoomState.answers[rNum];
-        currentRoomState.players.forEach(p => {
-          const cWord = ansMap[p.id] || '-';
-          const entry = document.createElement('div');
-          entry.innerHTML = `<strong>${p.name}:</strong> ${cWord}`;
-          rList.appendChild(entry);
-        });
-      });
+      <div class="player-list" id="reveal-order-list" style="gap:12px;margin-bottom:20px;text-align:left;"></div>
 
-      if(currentRoomState.roles[socket.id] === 'imposter') {
-        $('imposter-guess-wrapper').style.display = 'block';
-      } else {
-        $('imposter-guess-wrapper').style.display = 'none';
-      }
+      <div id="host-reveal-controls" style="display:none">
+        <button class="btn btn-primary btn-full" onclick="launchAnsweringPhase()">Begin Round →</button>
+      </div>
+      <div id="player-reveal-notice" style="font-size:0.8rem;">
+        Waiting for the host to start...
+      </div>
+    </div>
+  </div>
 
-      if(socket.id === currentRoomState.hostId) {
-        $('host-review-controls').style.display = 'block';
-        $('review-wait-text').style.display = 'none';
-      } else {
-        $('host-review-controls').style.display = 'none';
-        $('review-wait-text').style.display = 'block';
-      }
-    };
+  <div class="screen" id="screen-answer">
+    <div class="turn-banner" id="active-turn-banner">Calculating turn assignments...</div>
 
-    $('btn-imposter-guess').onclick = () => {
-      const g = $('input-imposter-guess').value;
-      if(!g) return alert('Enter a guess');
-      socket.emit('imposterGuessNumber', { roomCode: myRoomCode, guessedNumber: g });
-    };
+    <div class="card" id="answer-input-card" style="display:none">
+      <div class="card-title">Your Turn! Type your Clue</div>
+      <input type="text" id="answer-input" placeholder="Type a word clue..." maxlength="40">
+      <button class="btn btn-primary btn-full mt-12" id="clue-submit-btn" onclick="submitAnswer()">Submit Word</button>
+    </div>
 
-    $('btn-advance-round2').onclick = () => socket.emit('nextPhase', { roomCode: myRoomCode, targetPhase: 'round2' });
-    $('btn-advance-decision').onclick = () => socket.emit('nextPhase', { roomCode: myRoomCode, targetPhase: 'askContinue' });
+    <div class="card text-center" id="answer-waiting-card">
+      <p style="font-size:0.88rem;">Waiting for the clue</p>
+    </div>
 
-    socket.on('promptContinueVote', () => {
-      showScreen('screen-prompt-continue');
-      $('continue-tally-box').innerText = `Voted: 0 / ${currentRoomState.players.length}`;
-    });
+    <div class="card">
+      <div class="card-title">Clues (Round <span id="round-number-label">1</span>)</div>
+      <div class="answers-grid" id="live-answers-grid"></div>
+      <div class="mt-16" id="next-round-btn-container"></div>
+    </div>
+  </div>
 
-    $('btn-vote-more').onclick = () => socket.emit('submitContinueChoice', { roomCode: myRoomCode, choice: 'more' });
-    $('btn-vote-exile').onclick = () => socket.emit('submitContinueChoice', { roomCode: myRoomCode, choice: 'vote' });
+  <div class="screen" id="screen-continue-vote">
+    <div class="card text-center">
+      <div class="card-title">Extend the Game?</div>
+      <p style="font-size:0.9rem;margin-bottom:20px;">Do you need more round clues before voting out the imposter?</p>
+      <div class="flex-row" id="continue-choice-buttons">
+        <button class="btn btn-primary" onclick="voteContinue('more')">➕ Another round?</button>
+        <button class="btn btn-danger" onclick="voteContinue('vote')">🗳️ Go directly to Vote</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">Lobby Consensus Status</div>
+      <div class="player-list" id="continue-status-list"></div>
+    </div>
+  </div>
 
-    socket.on('continueStatusUpdated', (votesMap) => {
-      const count = Object.keys(votesMap).length;
-      $('continue-tally-box').innerText = `Voted: ${count} / ${currentRoomState.players.length}`;
-    });
+  <div class="screen" id="screen-vote">
+    <div class="card"><div id="vote-all-answers"></div></div>
+    <div class="card" id="vote-form-card">
+      <div class="card-title">Vote out the Imposter</div>
+      <div class="vote-grid" id="vote-player-grid"></div>
+      <button class="btn btn-danger btn-full mt-16" onclick="submitVote()" id="submit-vote-btn" disabled>Cast Vote</button>
+    </div>
+    <div class="card text-center" id="vote-submitted-card" style="display:none">
+      <div class="player-list" id="vote-status-list"></div>
+    </div>
+  </div>
 
-    socket.on('goToVoteScreen', (room) => {
-      currentRoomState = room;
-      showScreen('screen-vote');
-      $('vote-tally-box').innerText = `Voted: 0 / ${room.players.length}`;
+  <div class="screen" id="screen-result">
+    <div class="card text-center">
+      <div style="font-size:1.3rem;font-weight:700;margin-bottom:12px;" id="result-victory-declaration"></div>
+      <div style="font-size:1.5rem;font-weight:bold;color:#f43f5e;display:none;" id="result-imposter-box"></div>
+      <div style="margin-top:10px;font-size:1rem;display:none;" id="result-number-reveal"></div>
+      <div id="failed-guess-reveal-zone"></div>
+    </div>
+    <div class="card"><div class="vote-results" id="final-vote-results"></div></div>
+    <div class="card" id="host-result-controls" style="display:none">
+      <div id="host-action-buttons-wrapper"></div>
+    </div>
+    <div class="card text-center" id="player-tiebreaker-notice" style="display:none; color:#f59e0b">
+      The Host is setting up the emergency tie-breaker round...
+    </div>
+  </div>
 
-      $('voting-options-box').innerHTML = room.players.map(p => {
-        return `<button onclick="castBallot('${p.id}')">${p.name}</button>`;
-      }).join('');
-    });
+</div>
 
-    window.castBallot = (targetId) => {
-      $('voting-options-box').innerHTML = `<p>Vote cast! Waiting for players...</p>`;
-      socket.emit('castVote', { roomCode: myRoomCode, targetPlayerId: targetId });
-    };
+<div class="imposter-shortcut-bar" id="imposter-trap-dock">
+  <p>⚡ Guess the number:</p>
+  <input type="number" id="imposter-clandestine-number" placeholder="Code (1-10)" min="1" max="10">
+  <button class="btn btn-danger" onclick="triggerClandestineGuess()">Submit Guess 💥</button>
+</div>
 
-    socket.on('voteStatusUpdated', (votesMap) => {
-      const count = Object.keys(votesMap).length;
-      $('vote-tally-box').innerText = `Voted: ${count} / ${currentRoomState.players.length}`;
-    });
+<script src="/socket.io/socket.io.js"></script>
 
-    socket.on('goToResultScreen', (room) => {
-      currentRoomState = room;
-      showScreen('screen-result');
-      $('display-game-result').innerText = room.gameOverReason;
+<script>
+const socket = io(window.location.origin);
 
-      let revealHTML = `<p>The Number was: <strong>${room.theNumber}</strong></p>`;
-      revealHTML += `<p>Roles:</p><ul>`;
-      room.players.forEach(p => {
-        const roleName = room.roles[p.id];
-        revealHTML += `<li>${p.name}: ${roleName}</li>`;
-      });
-      revealHTML += `</ul>`;
-      $('final-reveal-box').innerHTML = revealHTML;
+let state = {
+  roomCode: null,
+  playerId: null,
+  playerName: null,
+  isHost: false,
+  players: [],
+  turnOrder: [],
+  myRole: 'crewmate',
+  theNumber: null,
+  round: 1,
+  phase: 'lobby',
+  selectedVote: null,
+  tieBreakerActive: false
+};
 
-      if(socket.id === room.hostId) {
-        $('btn-play-again').style.display = 'block';
-        $('result-wait-text').style.display = 'none';
-      } else {
-        $('btn-play-again').style.display = 'none';
-        $('result-wait-text').style.display = 'block';
-      }
-    });
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById('screen-' + id).classList.add('active');
+  
+  const hud = document.getElementById('crewmate-persistent-hud');
+  if (state.myRole === 'crewmate' && state.theNumber && ['turn-reveal', 'answer', 'continue-vote', 'vote'].includes(id)) {
+    hud.style.display = 'block';
+  } else {
+    hud.style.display = 'none';
+  }
+}
 
-    $('btn-play-again').onclick = () => socket.emit('resetGame', { roomCode: myRoomCode });
+function createGame() {
+  const name = document.getElementById('host-name').value.trim();
+  if (!name) return;
+  state.playerName = name;
+  state.isHost = true;
+  socket.emit('createRoom', { playerName: name });
+}
 
-    socket.on('errorMsg', (str) => alert(str));
-  </script>
-</body>
-</html>
+function joinGame() {
+  const code = document.getElementById('join-code').value.trim().toUpperCase();
+  const name = document.getElementById('join-name').value.trim();
+  if (!code || !name) return;
+  state.playerName = name;
+  state.isHost = false;
+  socket.emit('joinRoom', { roomCode: code, playerName: name });
+}
+
+function startGame() {
+  if (state.isHost && state.roomCode) {
+    socket.emit('startGame', { roomCode: state.roomCode });
+  }
+}
+
+function readyForRound() {
+  document.getElementById('ready-action-card').style.display = 'none';
+  document.getElementById('waiting-ready-card').style.display = 'block';
+  socket.emit('playerReady', { roomCode: state.roomCode });
+}
+
+function launchAnsweringPhase() {
+  socket.emit('startAnswering', { roomCode: state.roomCode });
+}
+
+function submitAnswer() {
+  const val = document.getElementById('answer-input').value.trim();
+  if (!val) return;
+  
+  const btn = document.getElementById('clue-submit-btn');
+  if (btn) btn.disabled = true;
+  
+  document.getElementById('answer-input-card').style.display = 'none';
+  socket.emit('submitClue', { roomCode: state.roomCode, clueWord: val });
+}
+
+function voteContinue(choice) {
+  document.getElementById('continue-choice-buttons').style.display = 'none';
+  socket.emit('submitContinueChoice', { roomCode: state.roomCode, choice: choice });
+}
+
+function triggerClandestineGuess() {
+  const inputEl = document.getElementById('imposter-clandestine-number');
+  const num = inputEl.value.trim();
+  if (!num) return;
+  socket.emit('imposterGuessNumber', { roomCode: state.roomCode, guessedNumber: num });
+  inputEl.value = '';
+}
+
+function requestNextPhase(target) {
+  socket.emit('nextPhase', { roomCode: state.roomCode, targetPhase: target });
+}
+
+function selectVote(id, el) {
+  state.selectedVote = id;
+  document.querySelectorAll('.vote-btn').forEach(b => b.classList.remove('selected'));
+  el.classList.add('selected');
+  document.getElementById('submit-vote-btn').disabled = false;
+}
+
+function submitVote() {
+  document.getElementById('vote-form-card').style.display = 'none';
+  document.getElementById('vote-submitted-card').style.display = 'block';
+  socket.emit('castVote', { roomCode: state.roomCode, targetPlayerId: state.selectedVote });
+}
+
+function playAgain() {
+  socket.emit('resetGame', { roomCode: state.roomCode });
+}
+
+socket.on('connect', () => {
+  state.playerId = socket.id;
+});
+
+socket.on('roomUpdated', (room) => {
+  state.roomCode = room.code;
+  state.players = room.players;
+  state.phase = room.phase;
+  state.theNumber = null;
+  state.myRole = 'crewmate';
+  state.tieBreakerActive = false;
+  
+  document.getElementById('imposter-trap-dock').style.display = 'none';
+  document.getElementById('crewmate-persistent-hud').style.display = 'none';
+  document.getElementById('display-code').textContent = room.code;
+  document.getElementById('player-count-label').textContent = `${room.players.length} joined`;
+  document.getElementById('host-controls').style.display = state.isHost ? 'block' : 'none';
+  
+  const btn = document.getElementById('start-btn');
+  if (btn) btn.disabled = room.players.length < 3;
+  
+  const targetContainer = document.getElementById('waiting-players');
+  targetContainer.innerHTML = ''; 
+  targetContainer.innerHTML = room.players.map(p => 
+    `<div class="player-item"><div class="player-badge">${p.name} ${p.id === room.hostId ? '👑' : ''}</div><div class="status-dot"></div></div>`
+  ).join('');
+  
+  showScreen('waiting');
+});
+
+socket.on('goToRoleScreen', (room) => {
+  state.phase = 'role';
+  state.round = room.round;
+  state.myRole = room.roles[state.playerId];
+  state.theNumber = room.theNumber;
+  state.tieBreakerActive = false;
+  
+  const isImposter = state.myRole === 'imposter';
+  document.getElementById('imposter-trap-dock').style.display = isImposter ? 'flex' : 'none';
+
+  if (!isImposter) {
+    document.getElementById('hud-number-slot').textContent = state.theNumber;
+  } else {
+    document.getElementById('crewmate-persistent-hud').style.display = 'none';
+  }
+
+  document.getElementById('role-card-container').innerHTML = `
+    <div class="role-card ${isImposter ? 'imposter' : 'crewmate'}">
+      <div class="role-label">${isImposter ? 'IMPOSTER' : 'CREWMATE'}</div>
+      <div class="role-number">${isImposter ? 'Objective: Blending and guess the number' : 'Number: ' + state.theNumber}</div>
+    </div>
+  `;
+  
+  document.getElementById('ready-action-card').style.display = 'block';
+  document.getElementById('waiting-ready-card').style.display = 'none';
+  
+  const rc = document.getElementById('ready-players');
+  rc.innerHTML = ''; 
+  rc.innerHTML = state.players.map(p => 
+    `<div class="player-item"><div>${p.name}</div><span class="player-waiting" id="ready-status-${p.id}">⏳ Waiting</span></div>`
+  ).join('');
+  
+  showScreen('role');
+});
+
+socket.on('readyListUpdated', (readyPlayersMap) => {
+  state.players.forEach(p => {
+    const el = document.getElementById(`ready-status-${p.id}`);
+    if (el && readyPlayersMap[p.id]) {
+      el.className = 'player-answered';
+      el.textContent = '✓ Ready';
+    }
+  });
+});
+
+socket.on('goToTurnRevealScreen', (room) => {
+  state.phase = 'turnReveal';
+  state.round = room.round;
+  state.turnOrder = room.turnOrder;
+  state.tieBreakerActive = room.tieBreakerActive;
+
+  document.querySelectorAll('.reveal-round-title').forEach(el => el.textContent = room.round);
+  
+  const orderList = document.getElementById('reveal-order-list');
+  orderList.innerHTML = ''; 
+  orderList.innerHTML = room.turnOrder.map((p, index) => `
+    <div class="order-item">
+      <div class="order-badge">${index + 1}</div>
+      <div class="order-name">${p.name} ${p.id === state.playerId ? '<span style="color:#e879f9">(You)</span>' : ''}</div>
+    </div>
+  `).join('');
+
+  document.getElementById('host-reveal-controls').style.display = state.isHost ? 'block' : 'none';
+  document.getElementById('player-reveal-notice').style.display = state.isHost ? 'none' : 'block';
+
+  showScreen('turn-reveal');
+});
+
+socket.on('goToAnswerScreen', (room) => {
+  state.phase = 'answer';
+  state.round = room.round;
+  state.tieBreakerActive = room.tieBreakerActive;
+  
+  document.getElementById('round-number-label').textContent = room.round;
+  document.getElementById('answer-input').value = '';
+  document.getElementById('live-answers-grid').innerHTML = '';
+  document.getElementById('next-round-btn-container').innerHTML = '';
+  
+  const btn = document.getElementById('clue-submit-btn');
+  if (btn) btn.disabled = false;
+  
+  document.getElementById('answer-input-card').style.display = 'none';
+  document.getElementById('answer-waiting-card').style.display = 'block';
+  
+  showScreen('answer');
+});
+
+socket.on('nextTurnIndex', ({ activePlayerId, activePlayerName }) => {
+  const banner = document.getElementById('active-turn-banner');
+  if (activePlayerId === state.playerId) {
+    banner.textContent = "⭐️ YOUR TURN TO SUBMIT A WORD! ⭐️";
+    const btn = document.getElementById('clue-submit-btn');
+    if (btn) btn.disabled = false;
+    document.getElementById('answer-input-card').style.display = 'block';
+    document.getElementById('answer-waiting-card').style.display = 'none';
+  } else {
+    banner.textContent = `${activePlayerName} is typing`;
+    document.getElementById('answer-input-card').style.display = 'none';
+    document.getElementById('answer-waiting-card').style.display = 'block';
+  }
+});
+
+socket.on('clueRevealedLive', ({ playerId, playerName, clueWord, roundAnswers }) => {
+  const grid = document.getElementById('live-answers-grid');
+  const currentLineup = state.turnOrder && state.turnOrder.length ? state.turnOrder : state.players;
+  
+  grid.innerHTML = ''; 
+  grid.innerHTML = currentLineup.map(p => {
+    if (roundAnswers[p.id] !== undefined) {
+      return `<div class="answer-card">
+                <div class="answer-player">${p.name}</div>
+                <div class="answer-text">${roundAnswers[p.id]}</div>
+              </div>`;
+    } else {
+      return `<div class="answer-card" style="opacity: 0.35; border-style: dashed;">
+                <div class="answer-player">${p.name}</div>
+                <div class="answer-text" style="font-size:0.8rem;">Thinking...</div>
+              </div>`;
+    }
+  }).join('');
+});
+
+socket.on('showAllClues', (room) => {
+  document.getElementById('active-turn-banner').textContent = "Round complete! All clues loaded.";
+  document.getElementById('answer-input-card').style.display = 'none';
+  document.getElementById('answer-waiting-card').style.display = 'none';
+  
+  const container = document.getElementById('next-round-btn-container');
+  if (state.isHost) {
+    if (room.tieBreakerActive) {
+      container.innerHTML = `<button class="btn btn-danger btn-full" onclick="requestNextPhase('vote')">Proceed directly to Vote 🗳️</button>`;
+    } else if (room.round === 1) {
+      container.innerHTML = `<button class="btn btn-primary btn-full" onclick="requestNextPhase('round2')">Proceed to Round 2 →</button>`;
+    } else {
+      container.innerHTML = `<button class="btn btn-primary btn-full" onclick="requestNextPhase('askContinue')">Proceed into voting or next Round 🗳️</button>`;
+    }
+  } else {
+    container.innerHTML = `<div class="text-center">Waiting for host configuration...</div>`;
+  }
+});
+
+socket.on('promptContinueVote', () => {
+  document.getElementById('continue-choice-buttons').style.display = 'flex';
+  
+  const cv = document.getElementById('continue-status-list');
+  cv.innerHTML = ''; 
+  cv.innerHTML = state.players.map(p => 
+    `<div class="player-item"><div>${p.name}</div><span class="player-waiting" id="continue-status-${p.id}">⏳ Voting...</span></div>`
+  ).join('');
+  showScreen('continue-vote');
+});
+
+socket.on('continueStatusUpdated', (votesMap) => {
+  state.players.forEach(p => {
+    const el = document.getElementById(`continue-status-${p.id}`);
+    if (el && votesMap[p.id]) {
+      el.className = 'player-answered';
+      el.textContent = votesMap[p.id] === 'more' ? '✓ Wants Another Round' : '✓ Wants to Vote';
+    }
+  });
+});
+
+socket.on('goToVoteScreen', (room) => {
+  state.phase = 'vote';
+  state.
