@@ -137,7 +137,7 @@ io.on('connection', (socket) => {
     const allReady = room.players.every(p => room.readyPlayers[p.id]);
     if (allReady) {
       room.phase = 'turnReveal';
-      // Sets the order here for Round 1
+      // Locks turn order securely for Round 1
       room.turnOrder = shuffleArray(room.players);
       io.to(room.code).emit('goToTurnRevealScreen', room);
     }
@@ -172,11 +172,10 @@ io.on('connection', (socket) => {
     if (socket.id !== activePlayer.id) return; 
 
     room.answers[room.round][socket.id] = clueWord;
-    const activePlayerObj = room.players.find(p => p.id === socket.id);
 
     io.to(room.code).emit('clueRevealedLive', {
       playerId: socket.id,
-      playerName: activePlayerObj ? activePlayerObj.name : 'Unknown',
+      playerName: activePlayer.name,
       clueWord: clueWord,
       roundAnswers: room.answers[room.round]
     });
@@ -201,7 +200,7 @@ io.on('connection', (socket) => {
 
     if (targetPhase === 'round2') {
       room.round = 2;
-      // Reuses the exact same turn order array as Round 1
+      // Reuses the exact same locked turn order array as Round 1
       io.to(room.code).emit('goToTurnRevealScreen', room);
     } 
     else if (targetPhase === 'askContinue') {
