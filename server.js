@@ -29,9 +29,10 @@ io.on('connection', (socket) => {
       round: 1,
       hostId: socket.id,
       players: [{ id: socket.id, name: playerName }],
-      answers: { 1: {}, 2: {} },
+      answers: {}, // Dynamic rounds mapping
       votes: {},
-      readyPlayers: {}
+      readyPlayers: {},
+      continueVotes: {}
     };
 
     socket.emit('roomUpdated', rooms[code]);
@@ -62,6 +63,7 @@ io.on('connection', (socket) => {
     if (!room || room.hostId !== socket.id) return;
 
     room.phase = 'role';
+    room.round = 1;
     room.theNumber = Math.floor(Math.random() * 10) + 1;
     
     const imposterIndex = Math.floor(Math.random() * room.players.length);
@@ -73,12 +75,13 @@ io.on('connection', (socket) => {
     });
 
     room.readyPlayers = {};
-    room.answers = { 1: {}, 2: {} };
+    room.answers = { 1: {} };
+    room.continueVotes = {};
 
     io.to(roomCode).emit('goToRoleScreen', room);
   });
 
-  // 4. PLAYER CLICKS "READY" (Host and Players)
+  // 4. PLAYER CLICKS "READY"
   socket.on('playerReady', ({ roomCode }) => {
     const room = rooms[roomCode];
     if (!room) return;
@@ -93,8 +96,8 @@ io.on('connection', (socket) => {
     }
   });
 
-  // 5. PLAYER SUBMITS NUMERICAL CLUE (Host and Players)
-  socket.on('submitClue', ({ roomCode, clueNumber }) => {
+  // 5. PLAYER SUBMITS WORD CLUE (Updated to handle strings)
+  socket.on('submitClue', ({ roomCode, clueWord }) => {
     const room = rooms[roomCode];
     if (!room) return;
 
@@ -102,7 +105,7 @@ io.on('connection', (socket) => {
       room.answers[room.round] = {};
     }
 
-    room.answers[room.round][socket.id] = clueNumber;
+    room.answers[room.round][socket.id] = clueWord;
     io.to(roomCode).emit('clueStatusUpdated', room.answers[room.round]);
 
     if (Object.keys(room.answers[room.round]).length === room.players.length) {
@@ -110,14 +113,19 @@ io.on('connection', (socket) => {
     }
   });
 
-  // 6. PROCEED TO ROUND 2 OR VOTING
+  // 6. PROCEED TO NEXT PHASE OR INTERMEDIATE DECISIONS
   socket.on('nextPhase', ({ roomCode, targetPhase }) => {
     const room = rooms[roomCode];
     if (!room || room.hostId !== socket.id) return;
 
     if (targetPhase === 'round2') {
       room.round = 2;
+      room.answers[2] = {};
       io.to(roomCode).emit('goToAnswerScreen', room);
+    } else if (targetPhase === 'askContinue') {
+      // Prompt all players to vote on whether to add another round
+      room.continueVotes = {};
+      io.to(roomCode).emit('promptContinueVote');
     } else if (targetPhase === 'vote') {
       room.phase = 'vote';
       room.votes = {};
@@ -125,7 +133,38 @@ io.on('connection', (socket) => {
     }
   });
 
-  // 7. CAST VOTE AGAINST A PLAYER
+  // 6b. HANDLE PLAYER VOTES TO CONTINUE OR END CLUES
+  socket.on('submitContinueChoice', ({ roomCode, choice }) => {
+    const room = rooms[roomCode];
+    if (!room) return;
+
+    room.continueVotes[socket.id] = choice; // 'more' or 'vote'
+    io.to(roomCode).emit('continueStatusUpdated', room.continueVotes);
+
+    if (Object.keys(room.continueVotes).length === room.players.length) {
+      // Check what the majority wanted
+      let moreCount = 0;
+      let voteCount = 0;
+      Object.values(room.continueVotes).forEach(v => {
+        if (v === 'more') moreCount++;
+        else voteCount++;
+      });
+
+      if (moreCount >= voteCount) {
+        // Add another round dynamic
+        room.round++;
+        room.answers[room.round] = {};
+        io.to(roomCode).emit('goToAnswerScreen', room);
+      } else {
+        // Move to final accusation voting
+        room.phase = 'vote';
+        room.votes = {};
+        io.to(roomCode).emit('goToVoteScreen', room);
+      }
+    }
+  });
+
+  // 7. CAST FINAL ACCUSATION VOTE AGAINST A PLAYER
   socket.on('castVote', ({ roomCode, targetPlayerId }) => {
     const room = rooms[roomCode];
     if (!room) return;
@@ -153,10 +192,11 @@ io.on('connection', (socket) => {
 
     room.phase = 'waiting';
     room.round = 1;
-    room.answers = { 1: {}, 2: {} };
+    room.answers = {};
     room.votes = {};
     room.roles = {};
     room.readyPlayers = {};
+    room.continueVotes = {};
     room.theNumber = null;
     room.voteTally = null;
 
@@ -170,5 +210,5 @@ io.on('connection', (socket) => {
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-  console.log(`Server running live on port ${PORT}! 🔥`);
+  console.log(`Server is running smoothly! 🔥`);
 });
