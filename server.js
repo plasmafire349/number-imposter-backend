@@ -15,7 +15,6 @@ function generateRoomCode() {
   return Math.random().toString(36).substring(2, 6).toUpperCase();
 }
 
-// Helper to shuffle turn orders
 function shuffleArray(array) {
   const arr = [...array];
   for (let i = arr.length - 1; i > 0; i--) {
@@ -39,7 +38,7 @@ io.on('connection', (socket) => {
       round: 1,
       hostId: socket.id,
       players: [{ id: socket.id, name: playerName }],
-      turnOrder: [], // Randomly shuffled order per round
+      turnOrder: [],
       answers: {}, 
       votes: {},
       readyPlayers: {},
@@ -47,7 +46,8 @@ io.on('connection', (socket) => {
       turnIndex: 0,
       theNumber: null,
       roles: {},
-      gameOverReason: null
+      gameOverReason: null,
+      failedImposterGuess: null // Tracks wrong guess string to show everyone
     };
 
     socket.emit('roomUpdated', rooms[code]);
@@ -81,6 +81,7 @@ io.on('connection', (socket) => {
     room.round = 1;
     room.theNumber = Math.floor(Math.random() * 10) + 1;
     room.gameOverReason = null;
+    room.failedImposterGuess = null;
     
     const imposterIndex = Math.floor(Math.random() * room.players.length);
     const imposterId = room.players[imposterIndex].id;
@@ -109,8 +110,6 @@ io.on('connection', (socket) => {
       room.phase = 'answer';
       room.readyPlayers = {}; 
       room.turnIndex = 0;
-      
-      // RANDOMIZE STARTING TURN ORDER
       room.turnOrder = shuffleArray(room.players);
       
       io.to(roomCode).emit('goToAnswerScreen', room);
@@ -162,7 +161,7 @@ io.on('connection', (socket) => {
       room.round = 2;
       room.turnIndex = 0;
       room.answers[2] = {};
-      room.turnOrder = shuffleArray(room.players); // Randomize starting turns again for round 2
+      room.turnOrder = shuffleArray(room.players);
       io.to(roomCode).emit('goToAnswerScreen', room);
       io.to(roomCode).emit('nextTurnIndex', { 
         activePlayerId: room.turnOrder[room.turnIndex].id, 
@@ -198,7 +197,7 @@ io.on('connection', (socket) => {
         room.round++;
         room.turnIndex = 0;
         room.answers[room.round] = {};
-        room.turnOrder = shuffleArray(room.players); // Random turn layout
+        room.turnOrder = shuffleArray(room.players);
         io.to(roomCode).emit('goToAnswerScreen', room);
         io.to(roomCode).emit('nextTurnIndex', { 
           activePlayerId: room.turnOrder[room.turnIndex].id, 
@@ -229,7 +228,6 @@ io.on('connection', (socket) => {
       });
       room.voteTally = tally;
 
-      // Check if majority successfully voted out the imposter
       const imposter = room.players.find(p => room.roles[p.id] === 'imposter');
       let highestVotedId = room.players[0].id;
       let maxVotes = -1;
@@ -255,32 +253,29 @@ io.on('connection', (socket) => {
     }
   });
 
-  // 🚨 NEW CRITICAL RULE: IMPOSTER GUESS ANYTIME SHORTCUT
+  // 🚨 HIGH STAKES HACK LINK: CORRECT GUESS = WIN, WRONG GUESS = INSTANT LOSS
   socket.on('imposterGuessNumber', ({ roomCode, guessedNumber }) => {
     const room = rooms[roomCode];
     if (!room) return;
-    
-    // Ensure only the true imposter can invoke this trap trigger
     if (room.roles[socket.id] !== 'imposter') return;
-    // Disable guess if game is already resolved
     if (room.phase === 'waiting' || room.phase === 'role' || room.phase === 'result') return;
 
     const parsedGuess = parseInt(guessedNumber);
-    if (parsedGuess === room.theNumber) {
-      // Imposter guessed perfectly! Instant absolute win.
-      room.phase = 'result';
-      room.gameOverReason = "💥 IMPOSTER VICTORY! They successfully guessed the Secret Number!";
-      
-      // Generate empty tallies if they bypassed voting entirely
-      const tally = {};
-      room.players.forEach(p => tally[p.id] = 0);
-      room.voteTally = tally;
+    room.phase = 'result';
+    
+    // Default mock a baseline tally so empty layout arrays don't break map blocks
+    const tally = {};
+    room.players.forEach(p => tally[p.id] = 0);
+    room.voteTally = tally;
 
-      io.to(roomCode).emit('goToResultScreen', room);
+    if (parsedGuess === room.theNumber) {
+      room.gameOverReason = "💥 IMPOSTER VICTORY! They successfully guessed the Secret Number!";
     } else {
-      // Wrong guess! Notify only the imposter that they blew their shot so game continues
-      socket.emit('errorMsg', "❌ Wrong number! Keep blending in...");
+      room.failedImposterGuess = parsedGuess; // Log the failure to broadcast
+      room.gameOverReason = "💀 CREWMATE VICTORY! The Imposter made an incorrect guess and blew their cover!";
     }
+
+    io.to(roomCode).emit('goToResultScreen', room);
   });
 
   // 8. PLAY AGAIN RESET
@@ -299,6 +294,7 @@ io.on('connection', (socket) => {
     room.voteTally = null;
     room.turnIndex = 0;
     room.gameOverReason = null;
+    room.failedImposterGuess = null;
 
     io.to(roomCode).emit('roomUpdated', room);
   });
@@ -310,5 +306,5 @@ io.on('connection', (socket) => {
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-  console.log(`Server running live with Shuffled Starts & Blind Guesses! 🔥`);
+  console.log(`Server running live with Shuffled Starts & Sudden Death Guesses! 🔥`);
 });
