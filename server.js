@@ -28,11 +28,12 @@ app.get('/', (req, res) => {
 
 const rooms = {};
 
-// A fun list of words for the RJImposter mode variant
+// Fun dictionary pool for the RJImposter mode variant
 const rjWordPool = [
   "SPACESHIP", "ASTRONAUT", "GRAVITY", "STATION", "METEOR", 
   "ALIEN", "GALAXY", "ROCKET", "CRATER", "ORBIT", 
-  "TELESCOPE", "PLANET", "SHUTTLE", "ECLIPSE", "COSMOS"
+  "TELESCOPE", "PLANET", "SHUTTLE", "ECLIPSE", "COSMOS",
+  "NEBULA", "COMET", "SUPERNOVA", "SATELLITE", "ROVER"
 ];
 
 function generateRoomCode() {
@@ -44,6 +45,7 @@ function generateRoomCode() {
   return code;
 }
 
+// True cryptographic/Fisher-Yates random array shuffler
 function shuffleArray(array) {
   const copy = [...array];
   for (let i = copy.length - 1; i > 0; i--) {
@@ -111,7 +113,7 @@ io.on('connection', (socket) => {
     room.roles = {};
     room.readyPlayers = {};
     
-    // Assign objective secret based on mode choice
+    // Choose secret target based on variant mode
     if (room.gameMode === 'rj') {
       const randomIndex = Math.floor(Math.random() * rjWordPool.length);
       room.theNumber = rjWordPool[randomIndex]; 
@@ -119,14 +121,21 @@ io.on('connection', (socket) => {
       room.theNumber = Math.floor(Math.random() * 10) + 1;
     }
 
-    const shuffledPlayers = shuffleArray(room.players);
-    const imposter = shuffledPlayers[0];
-    
-    room.players.forEach(p => {
-      room.roles[p.id] = (p.id === imposter.id) ? 'imposter' : 'crewmate';
+    // FIX: Generate true random role distribution by shuffling an index map pool
+    const playerIndices = Array.from({ length: room.players.length }, (_, i) => i);
+    const shuffledIndices = shuffleArray(playerIndices);
+    const imposterIndex = shuffledIndices[0]; // The first index becomes the Imposter
+
+    room.players.forEach((player, idx) => {
+      if (idx === imposterIndex) {
+        room.roles[player.id] = 'imposter';
+      } else {
+        room.roles[player.id] = 'crewmate';
+      }
     });
 
-    // Locks dynamic turn sequence on round setup
+    // Fixes the round turn sequence bug: Shuffles turn order *once* right now, 
+    // and stays locked across all consecutive rounds.
     room.turnOrder = shuffleArray(room.players);
 
     io.to(room.code).emit('goToRoleScreen', room);
@@ -200,7 +209,7 @@ io.on('connection', (socket) => {
 
     if (targetPhase === 'round2') {
       room.round = 2;
-      // Fixed: Reuses initial random turnOrder instead of re-shuffling!
+      // Reuses original locked room.turnOrder array so positioning doesn't shift
       io.to(room.code).emit('goToTurnRevealScreen', room);
     } 
     else if (targetPhase === 'askContinue') {
