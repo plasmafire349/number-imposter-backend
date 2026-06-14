@@ -2,6 +2,7 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
+const fs = require('fs');
 
 const app = express();
 const server = http.createServer(app);
@@ -9,19 +10,31 @@ const io = new Server(server);
 
 const PORT = process.env.PORT || 3000;
 
-// 🌟 FIX: This line forces the server to look inside its own folder 
-// to automatically serve 'number-imposter.html' and all project assets!
 app.use(express.static(__dirname));
 
-// Also serve the root path directly to your HTML game file
 app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'number-imposter.html'));
+  try {
+    const files = fs.readdirSync(__dirname);
+    const htmlFile = files.find(file => file.toLowerCase().endsWith('.html'));
+    if (htmlFile) {
+      res.sendFile(path.join(__dirname, htmlFile));
+    } else {
+      res.status(404).send("Error: No HTML file found!");
+    }
+  } catch (err) {
+    res.status(500).send("Server Error.");
+  }
 });
 
-// Game State Database stored in memory
 const rooms = {};
 
-// Helper function to generate random 4-letter room codes
+// A fun list of words for the RJImposter mode variant
+const rjWordPool = [
+  "SPACESHIP", "ASTRONAUT", "GRAVITY", "STATION", "METEOR", 
+  "ALIEN", "GALAXY", "ROCKET", "CRATER", "ORBIT", 
+  "TELESCOPE", "PLANET", "SHUTTLE", "ECLIPSE", "COSMOS"
+];
+
 function generateRoomCode() {
   const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
   let code = '';
@@ -31,7 +44,6 @@ function generateRoomCode() {
   return code;
 }
 
-// Helper to shuffle arrays (Fisher-Yates)
 function shuffleArray(array) {
   const copy = [...array];
   for (let i = copy.length - 1; i > 0; i--) {
@@ -44,8 +56,7 @@ function shuffleArray(array) {
 io.on('connection', (socket) => {
   console.log(`User connected: ${socket.id}`);
 
-  // 1. CREATE ROOM
-  socket.on('createRoom', ({ playerName }) => {
+  socket.on('createRoom', ({ playerName, gameMode }) => {
     let roomCode = generateRoomCode();
     while (rooms[roomCode]) {
       roomCode = generateRoomCode();
@@ -56,13 +67,14 @@ io.on('connection', (socket) => {
       hostId: socket.id,
       players: [{ id: socket.id, name: playerName }],
       phase: 'lobby',
+      gameMode: gameMode || 'number', 
       round: 1,
       roles: {},
       theNumber: null,
       readyPlayers: {},
-      turnOrder: [],
+      turnOrder: [], 
       currentTurnIndex: 0,
-      answers: {}, 
+      answers: {},
       continueVotes: {},
       votes: {},
       tieBreakerActive: false,
@@ -72,34 +84,24 @@ io.on('connection', (socket) => {
 
     socket.join(roomCode);
     socket.emit('roomUpdated', rooms[roomCode]);
-    console.log(`Room created: ${roomCode} by ${playerName}`);
   });
 
-  // 2. JOIN ROOM
   socket.on('joinRoom', ({ roomCode, playerName }) => {
     const code = roomCode.toUpperCase();
     const room = rooms[code];
 
-    if (!room) {
-      return socket.emit('errorMsg', 'Room not found.');
-    }
-    if (room.phase !== 'lobby') {
-      return socket.emit('errorMsg', 'Game has already started.');
-    }
+    if (!room) return socket.emit('errorMsg', 'Room not found.');
+    if (room.phase !== 'lobby') return socket.emit('errorMsg', 'Game has already started.');
 
     room.players.push({ id: socket.id, name: playerName });
     socket.join(code);
     io.to(code).emit('roomUpdated', room);
-    console.log(`${playerName} joined room ${code}`);
   });
 
-  // 3. START GAME
   socket.on('startGame', ({ roomCode }) => {
     const room = rooms[roomCode.toUpperCase()];
     if (!room || room.hostId !== socket.id) return;
-    if (room.players.length < 3) {
-      return socket.emit('errorMsg', 'Need at least 3 players to start!');
-    }
+    if (room.players.length < 3) return socket.emit('errorMsg', 'Need at least 3 players to start!');
 
     room.phase = 'role';
     room.round = 1;
@@ -109,7 +111,13 @@ io.on('connection', (socket) => {
     room.roles = {};
     room.readyPlayers = {};
     
-    room.theNumber = Math.floor(Math.random() * 10) + 1;
+    // Assign objective secret based on mode choice
+    if (room.gameMode === 'rj') {
+      const randomIndex = Math.floor(Math.random() * rjWordPool.length);
+      room.theNumber = rjWordPool[randomIndex]; 
+    } else {
+      room.theNumber = Math.floor(Math.random() * 10) + 1;
+    }
 
     const shuffledPlayers = shuffleArray(room.players);
     const imposter = shuffledPlayers[0];
@@ -118,10 +126,12 @@ io.on('connection', (socket) => {
       room.roles[p.id] = (p.id === imposter.id) ? 'imposter' : 'crewmate';
     });
 
+    // Locks dynamic turn sequence on round setup
+    room.turnOrder = shuffleArray(room.players);
+
     io.to(room.code).emit('goToRoleScreen', room);
   });
 
-  // 4. PLAYER READY
   socket.on('playerReady', ({ roomCode }) => {
     const room = rooms[roomCode.toUpperCase()];
     if (!room) return;
@@ -132,12 +142,10 @@ io.on('connection', (socket) => {
     const allReady = room.players.every(p => room.readyPlayers[p.id]);
     if (allReady) {
       room.phase = 'turnReveal';
-      room.turnOrder = shuffleArray(room.players);
       io.to(room.code).emit('goToTurnRevealScreen', room);
     }
   });
 
-  // 5. START ANSWERING PHASE
   socket.on('startAnswering', ({ roomCode }) => {
     const room = rooms[roomCode.toUpperCase()];
     if (!room || room.hostId !== socket.id) return;
@@ -157,7 +165,6 @@ io.on('connection', (socket) => {
     });
   });
 
-  // 6. SUBMIT CLUE WORD
   socket.on('submitClue', ({ roomCode, clueWord }) => {
     const room = rooms[roomCode.toUpperCase()];
     if (!room) return;
@@ -166,11 +173,10 @@ io.on('connection', (socket) => {
     if (socket.id !== activePlayer.id) return; 
 
     room.answers[room.round][socket.id] = clueWord;
-    const activePlayerObj = room.players.find(p => p.id === socket.id);
 
     io.to(room.code).emit('clueRevealedLive', {
       playerId: socket.id,
-      playerName: activePlayerObj ? activePlayerObj.name : 'Unknown',
+      playerName: activePlayer.name,
       clueWord: clueWord,
       roundAnswers: room.answers[room.round]
     });
@@ -188,14 +194,13 @@ io.on('connection', (socket) => {
     }
   });
 
-  // 7. MULTI-PHASE HUB ROUTER
   socket.on('nextPhase', ({ roomCode, targetPhase }) => {
     const room = rooms[roomCode.toUpperCase()];
     if (!room || room.hostId !== socket.id) return;
 
     if (targetPhase === 'round2') {
       room.round = 2;
-      room.turnOrder = shuffleArray(room.players);
+      // Fixed: Reuses initial random turnOrder instead of re-shuffling!
       io.to(room.code).emit('goToTurnRevealScreen', room);
     } 
     else if (targetPhase === 'askContinue') {
@@ -209,12 +214,10 @@ io.on('connection', (socket) => {
     else if (targetPhase === 'tiebreakerRound') {
       room.tieBreakerActive = true;
       room.round++;
-      room.turnOrder = shuffleArray(room.players);
       io.to(room.code).emit('goToTurnRevealScreen', room);
     }
   });
 
-  // 8. EXTEND ROUND OR PROCEED CONSENSUS VOTE
   socket.on('submitContinueChoice', ({ roomCode, choice }) => {
     const room = rooms[roomCode.toUpperCase()];
     if (!room) return;
@@ -233,7 +236,6 @@ io.on('connection', (socket) => {
 
       if (moreCount >= voteCount) {
         room.round++;
-        room.turnOrder = shuffleArray(room.players);
         io.to(room.code).emit('goToTurnRevealScreen', room);
       } else {
         room.votes = {};
@@ -242,7 +244,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // 9. CAST ENFORCE VOTES
   socket.on('castVote', ({ roomCode, targetPlayerId }) => {
     const room = rooms[roomCode.toUpperCase()];
     if (!room) return;
@@ -275,39 +276,40 @@ io.on('connection', (socket) => {
 
       if (highestVotedPlayers.length > 1) {
         room.tieBreakerActive = true;
-        room.gameOverReason = "VOTING TIE! The group could not reach a consensus.";
+        room.gameOverReason = "It's a tie!";
         io.to(room.code).emit('goToResultScreen', room);
       } else {
         const exiledId = highestVotedPlayers[0];
         room.tieBreakerActive = false;
 
         if (room.roles[exiledId] === 'imposter') {
-          room.gameOverReason = "VICTORY! The Crewmates successfully voted out the Imposter!";
+          room.gameOverReason = "Crewmates Win! The Imposter was voted out.";
         } else {
-          room.gameOverReason = "DEFEAT! An innocent Crewmate was exiled. The Imposter wins!";
+          room.gameOverReason = "Imposter Wins! A crewmate was voted out.";
         }
         io.to(room.code).emit('goToResultScreen', room);
       }
     }
   });
 
-  // 10. CLANDESTINE IMPOSTER GUESS ATTEMPT
   socket.on('imposterGuessNumber', ({ roomCode, guessedNumber }) => {
     const room = rooms[roomCode.toUpperCase()];
     if (!room) return;
     if (room.roles[socket.id] !== 'imposter') return; 
 
     room.tieBreakerActive = false;
-    if (parseInt(guessedNumber) === parseInt(room.theNumber)) {
-      room.gameOverReason = "IMPOSTER VICTORY! The Imposter cracked the secret number code!";
+    const standardGuess = guessedNumber.trim().toUpperCase();
+    const standardSecret = String(room.theNumber).trim().toUpperCase();
+
+    if (standardGuess === standardSecret) {
+      room.gameOverReason = (room.gameMode === 'rj') ? "Imposter Wins! They guessed the secret word." : "Imposter Wins! They guessed the number.";
     } else {
       room.failedImposterGuess = guessedNumber;
-      room.gameOverReason = "CREWMATE VICTORY! The Imposter made a blind guess and blew their cover!";
+      room.gameOverReason = "Crewmates Win! The Imposter guessed wrong.";
     }
     io.to(room.code).emit('goToResultScreen', room);
   });
 
-  // 11. PLAY AGAIN / RESET ROOM LOBBY
   socket.on('resetGame', ({ roomCode }) => {
     const room = rooms[roomCode.toUpperCase()];
     if (!room || room.hostId !== socket.id) return;
@@ -317,7 +319,6 @@ io.on('connection', (socket) => {
     room.roles = {};
     room.theNumber = null;
     room.readyPlayers = {};
-    room.turnOrder = [];
     room.currentTurnIndex = 0;
     room.answers = {};
     room.continueVotes = {};
@@ -329,9 +330,7 @@ io.on('connection', (socket) => {
     io.to(room.code).emit('roomUpdated', room);
   });
 
-  // CLEAN UP ON LEAVE
   socket.on('disconnect', () => {
-    console.log(`User disconnected: ${socket.id}`);
     Object.keys(rooms).forEach(code => {
       const room = rooms[code];
       const index = room.players.findIndex(p => p.id === socket.id);
@@ -351,5 +350,5 @@ io.on('connection', (socket) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`Number Imposter Server is live on http://localhost:${PORT}`);
+  console.log(`Server is running on port ${PORT}`);
 });
