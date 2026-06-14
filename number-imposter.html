@@ -492,15 +492,33 @@ socket.on('goToRoleScreen', (room) => {
     document.getElementById('crewmate-persistent-hud').style.display = 'none';
   }
 
-  const objectiveText = (state.gameMode === 'rj') ? 'Objective: Blend in and guess the secret word' : 'Objective: Blend in and guess the number';
-  const roleDisplayValue = (state.gameMode === 'rj') ? 'Secret Word: ' + state.theNumber : 'Number: ' + state.theNumber;
-
-  document.getElementById('role-card-container').innerHTML = `
-    <div class="role-card ${isImposter ? 'imposter' : 'crewmate'}">
-      <div class="role-label ${isImposter ? 'imposter' : 'crewmate'}">${isImposter ? 'IMPOSTER' : 'CREWMATE'}</div>
-      <div class="role-number ${isImposter ? 'imposter-text' : ''}">${isImposter ? objectiveText : roleDisplayValue}</div>
+  const currentCategoryName = room.currentCategory || (state.gameMode === 'rj' ? "WORD DETECTIVE" : "NUMBERS");
+  
+  let dynamicRoleBoxHtml = `
+    <div style="background: rgba(139,92,246,0.1); border: 1px solid rgba(139,92,246,0.3); border-radius: 8px; padding: 10px; margin-bottom: 16px; font-weight: 700; text-align: center; font-size: 0.85rem; letter-spacing: 2px; color: var(--accent2);">
+      📂 MATCH CATEGORY: ${currentCategoryName}
     </div>
   `;
+
+  if (isImposter) {
+    const objectiveText = (state.gameMode === 'rj') ? `Objective: Blend in and guess the secret word from the ${currentCategoryName} category` : 'Objective: Blend in and guess the correct number';
+    dynamicRoleBoxHtml += `
+      <div class="role-card imposter">
+        <div class="role-label imposter">IMPOSTER</div>
+        <div class="role-number imposter-text">${objectiveText}</div>
+      </div>
+    `;
+  } else {
+    const targetValue = (state.gameMode === 'rj') ? 'Secret Word: ' + state.theNumber : 'Number: ' + state.theNumber;
+    dynamicRoleBoxHtml += `
+      <div class="role-card crewmate">
+        <div class="role-label crewmate">CREWMATE</div>
+        <div class="role-number">${targetValue}</div>
+      </div>
+    `;
+  }
+
+  document.getElementById('role-card-container').innerHTML = dynamicRoleBoxHtml;
   
   document.getElementById('ready-action-card').style.display = 'block';
   document.getElementById('waiting-ready-card').style.display = 'none';
