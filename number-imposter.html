@@ -134,8 +134,12 @@
     gap: 16px;
   }
   .imposter-shortcut-bar p { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 0.85rem; color: var(--imposter); letter-spacing: 1px; text-transform: uppercase; text-shadow: 0 0 10px var(--imposter); }
-  .imposter-shortcut-bar input { width: 140px; border-color: rgba(244,63,94,0.4); text-align: center; font-weight: 700; color: var(--imposter); }
+  .imposter-shortcut-bar input { width: 160px; background: var(--surface2); border: 1px solid rgba(244,63,94,0.4); border-radius: 8px; padding: 12px 16px; text-align: center; font-weight: 700; color: var(--imposter); font-family: 'Space Mono', monospace; outline: none; }
   .imposter-shortcut-bar input:focus { border-color: var(--imposter); box-shadow: 0 0 0 3px rgba(244,63,94,0.2); }
+
+  .mode-select-box { display: flex; gap: 10px; margin-bottom: 16px; }
+  .mode-option { flex: 1; background: var(--surface2); border: 2px solid rgba(139,92,246,0.2); border-radius: 8px; padding: 12px; text-align: center; cursor: pointer; font-size: 0.8rem; font-weight: 700; color: var(--purple-pale); transition: all 0.2s; }
+  .mode-option.active { border-color: var(--accent); background: rgba(232,121,249,0.12); color: white; }
 
   .flex-row { display: flex; gap: 10px; }
   .flex-row .btn { flex: 1; }
@@ -155,7 +159,7 @@
 
 <div id="app">
 
-  <div class="hud-badge" id="crewmate-persistent-hud">YOUR NUMBER: <span id="hud-number-slot">—</span></div>
+  <div class="hud-badge" id="crewmate-persistent-hud">YOUR CODE: <span id="hud-number-slot">—</span></div>
 
   <div class="screen active" id="screen-lobby">
     <div class="logo">NUMBER IMPOSTER</div>
@@ -163,6 +167,13 @@
 
     <div class="card">
       <div class="card-title"><span class="dot"></span> Create Game</div>
+      
+      <div class="mb-8" style="font-size: 0.8rem; color: var(--purple-glow);">Select Game Variant:</div>
+      <div class="mode-select-box">
+        <div class="mode-option active" id="opt-mode-number" onclick="setCreationMode('number')">🔢 Number Imposter</div>
+        <div class="mode-option" id="opt-mode-rj" onclick="setCreationMode('rj')">✨ RJImposter</div>
+      </div>
+
       <div class="mb-8">Your name</div>
       <input type="text" id="host-name" placeholder="Enter your name..." maxlength="18">
       <div class="mt-20">
@@ -183,6 +194,7 @@
     <div class="card">
       <div class="card-title"><span class="dot"></span> Room Code</div>
       <div style="font-family:'Syne',sans-serif;font-size:2.8rem;font-weight:800;letter-spacing:8px;color:var(--purple-pale);text-align:center;" id="display-code">—</div>
+      <div id="variant-display-label" style="text-align:center; font-size:0.75rem; color:var(--accent); margin-top:8px; font-weight:700; letter-spacing:1px;"></div>
     </div>
 
     <div class="card">
@@ -208,7 +220,7 @@
   <div class="screen" id="screen-turn-reveal">
     <div class="card text-center">
       <div class="card-title"><span class="dot"></span> Turn order (Round <span class="reveal-round-title">1</span>)</div>
-      <p style="font-size:0.85rem;color:var(--text-dim);margin-bottom:20px;">Review the order! You can only submit a clue when your number is called.</p>
+      <p style="font-size:0.85rem;color:var(--text-dim);margin-bottom:20px;">Review the order! You can only submit a clue when your name is called.</p>
       
       <div class="player-list" id="reveal-order-list" style="gap:12px;margin-bottom:20px;text-align:left;"></div>
 
@@ -287,17 +299,15 @@
 </div>
 
 <div class="imposter-shortcut-bar" id="imposter-trap-dock">
-  <p>⚡ Guess the number:</p>
-  <input type="number" id="imposter-clandestine-number" placeholder="Code (1-10)" min="1" max="10">
+  <p id="trap-dock-label">⚡ Guess the number:</p>
+  <input type="text" id="imposter-clandestine-number" placeholder="Your Guess...">
   <button class="btn btn-danger" onclick="triggerClandestineGuess()">Submit Guess 💥</button>
 </div>
 
 <script src="/socket.io/socket.io.js"></script>
 
 <script>
-// Point directly to the base window domain
 const socket = io(window.location.origin);
-
 let state = {
   roomCode: null,
   playerId: null,
@@ -306,12 +316,19 @@ let state = {
   players: [],
   turnOrder: [],
   myRole: 'crewmate',
-  theNumber: null,
+  theNumber: null, 
+  gameMode: 'number', 
   round: 1,
   phase: 'lobby',
   selectedVote: null,
   tieBreakerActive: false
 };
+
+function setCreationMode(mode) {
+  state.gameMode = mode;
+  document.getElementById('opt-mode-number').classList.toggle('active', mode === 'number');
+  document.getElementById('opt-mode-rj').classList.toggle('active', mode === 'rj');
+}
 
 function showScreen(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
@@ -330,7 +347,7 @@ function createGame() {
   if (!name) return;
   state.playerName = name;
   state.isHost = true;
-  socket.emit('createRoom', { playerName: name });
+  socket.emit('createRoom', { playerName: name, gameMode: state.gameMode });
 }
 
 function joinGame() {
@@ -361,7 +378,6 @@ function launchAnsweringPhase() {
 function submitAnswer() {
   const val = document.getElementById('answer-input').value.trim();
   if (!val) return;
-  
   const btn = document.getElementById('clue-submit-btn');
   if (btn) btn.disabled = true;
   
@@ -413,6 +429,7 @@ socket.on('roomUpdated', (room) => {
   state.roomCode = room.code;
   state.players = room.players;
   state.phase = room.phase;
+  state.gameMode = room.gameMode || 'number';
   state.theNumber = null;
   state.myRole = 'crewmate';
   state.tieBreakerActive = false;
@@ -420,6 +437,14 @@ socket.on('roomUpdated', (room) => {
   document.getElementById('imposter-trap-dock').style.display = 'none';
   document.getElementById('crewmate-persistent-hud').style.display = 'none';
   document.getElementById('display-code').textContent = room.code;
+  
+  const modeLabel = document.getElementById('variant-display-label');
+  if(state.gameMode === 'rj') {
+    modeLabel.textContent = "VARIANT ACTIVE: RJIMPOSTER (WORD GUESS)";
+  } else {
+    modeLabel.textContent = "VARIANT ACTIVE: NUMBER IMPOSTER";
+  }
+
   document.getElementById('player-count-label').textContent = `${room.players.length} joined`;
   document.getElementById('host-controls').style.display = state.isHost ? 'block' : 'none';
   
@@ -440,10 +465,26 @@ socket.on('goToRoleScreen', (room) => {
   state.round = room.round;
   state.myRole = room.roles[state.playerId];
   state.theNumber = room.theNumber;
+  state.gameMode = room.gameMode || 'number';
   state.tieBreakerActive = false;
   
   const isImposter = state.myRole === 'imposter';
   document.getElementById('imposter-trap-dock').style.display = isImposter ? 'flex' : 'none';
+
+  const labelPrefix = (state.gameMode === 'rj') ? 'YOUR WORD: ' : 'YOUR NUMBER: ';
+  document.getElementById('crewmate-persistent-hud').innerHTML = `${labelPrefix}<span id="hud-number-slot">—</span>`;
+
+  const dockLabel = document.getElementById('trap-dock-label');
+  const dockInput = document.getElementById('imposter-clandestine-number');
+  if (state.gameMode === 'rj') {
+    dockLabel.textContent = "⚡ Guess the secret word:";
+    dockInput.placeholder = "Type word here...";
+    dockInput.type = "text";
+  } else {
+    dockLabel.textContent = "⚡ Guess the number:";
+    dockInput.placeholder = "Code (1-10)";
+    dockInput.type = "number";
+  }
 
   if (!isImposter) {
     document.getElementById('hud-number-slot').textContent = state.theNumber;
@@ -451,10 +492,13 @@ socket.on('goToRoleScreen', (room) => {
     document.getElementById('crewmate-persistent-hud').style.display = 'none';
   }
 
+  const objectiveText = (state.gameMode === 'rj') ? 'Objective: Blend in and guess the secret word' : 'Objective: Blend in and guess the number';
+  const roleDisplayValue = (state.gameMode === 'rj') ? 'Secret Word: ' + state.theNumber : 'Number: ' + state.theNumber;
+
   document.getElementById('role-card-container').innerHTML = `
     <div class="role-card ${isImposter ? 'imposter' : 'crewmate'}">
       <div class="role-label ${isImposter ? 'imposter' : 'crewmate'}">${isImposter ? 'IMPOSTER' : 'CREWMATE'}</div>
-      <div class="role-number ${isImposter ? 'imposter-text' : ''}">${isImposter ? 'Objective: Blending and guess the number' : 'Number: ' + state.theNumber}</div>
+      <div class="role-number ${isImposter ? 'imposter-text' : ''}">${isImposter ? objectiveText : roleDisplayValue}</div>
     </div>
   `;
   
@@ -462,7 +506,7 @@ socket.on('goToRoleScreen', (room) => {
   document.getElementById('waiting-ready-card').style.display = 'none';
   
   const rc = document.getElementById('ready-players');
-  rc.innerHTML = ''; 
+  rc.innerHTML = '';
   rc.innerHTML = state.players.map(p => 
     `<div class="player-item"><div>${p.name}</div><span class="player-waiting" id="ready-status-${p.id}">⏳ Waiting</span></div>`
   ).join('');
@@ -547,7 +591,7 @@ socket.on('clueRevealedLive', ({ playerId, playerName, clueWord, roundAnswers })
       return `<div class="answer-card ${p.id === playerId ? 'newly-added' : ''}">
                 <div class="answer-player">${p.name}</div>
                 <div class="answer-text">${roundAnswers[p.id]}</div>
-              </div>`;
+         </div>`;
     } else {
       return `<div class="answer-card" style="opacity: 0.35; border-style: dashed;">
                 <div class="answer-player">${p.name}</div>
@@ -578,7 +622,6 @@ socket.on('showAllClues', (room) => {
 
 socket.on('promptContinueVote', () => {
   document.getElementById('continue-choice-buttons').style.display = 'flex';
-  
   const cv = document.getElementById('continue-status-list');
   cv.innerHTML = ''; 
   cv.innerHTML = state.players.map(p => 
@@ -617,13 +660,11 @@ socket.on('goToVoteScreen', (room) => {
   
   document.getElementById('vote-form-card').style.display = 'block';
   document.getElementById('vote-submitted-card').style.display = 'none';
-  
   const vs = document.getElementById('vote-status-list');
   vs.innerHTML = ''; 
   vs.innerHTML = state.players.map(p => 
     `<div class="player-item"><div>${p.name}</div><span class="player-waiting" id="vote-status-${p.id}">⏳ Deciding...</span></div>`
   ).join('');
-  
   showScreen('vote');
 });
 
@@ -664,7 +705,8 @@ socket.on('goToResultScreen', (room) => {
     playerNotice.style.display = 'none';
     
     impBox.textContent = "IMPOSTER WAS: " + (imposter ? imposter.name : 'Unknown');
-    numRev.textContent = `The Hidden Number was: ${room.theNumber}`;
+    const labelLabel = (room.gameMode === 'rj') ? 'The Secret Word was: ' : 'The Hidden Number was: ';
+    numRev.textContent = `${labelLabel}${room.theNumber}`;
     if (state.isHost) {
       hostWrapper.innerHTML = `<button class="btn btn-primary btn-full" onclick="playAgain()">Play Again</button>`;
     }
@@ -681,7 +723,7 @@ socket.on('goToResultScreen', (room) => {
   const maxVotes = Math.max(...Object.values(tally), 1);
   
   const finalVoteEl = document.getElementById('final-vote-results');
-  finalVoteEl.innerHTML = ''; 
+  finalVoteEl.innerHTML = '';
   finalVoteEl.innerHTML = state.players.sort((a,b) => (tally[b.id]||0) - (tally[a.id]||0)).map(p => `
     <div class="vote-bar">
       <div class="vote-bar-name">${p.name} ${(!room.tieBreakerActive && room.roles[p.id]==='imposter')?'🕵️':''}</div>
@@ -689,7 +731,6 @@ socket.on('goToResultScreen', (room) => {
       <div class="vote-bar-count">${tally[p.id]||0}</div>
     </div>
   `).join('');
-  
   document.getElementById('host-result-controls').style.display = state.isHost ? 'block' : 'none';
   showScreen('result');
 });
