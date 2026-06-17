@@ -6,9 +6,12 @@ const path = require('path');
 
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Corrected wildcard syntax for Express v5 / Node v24 compatibility
-app.get('(.*)', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'number-imposter.html'));
+// Express v5 absolute fallback matching middleware 
+app.use((req, res, next) => {
+  if (req.method === 'GET') {
+    return res.sendFile(path.join(__dirname, 'public', 'number-imposter.html'));
+  }
+  next();
 });
 
 const rooms = {};
