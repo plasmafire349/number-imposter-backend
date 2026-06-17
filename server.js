@@ -6,8 +6,8 @@ const path = require('path');
 
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Fallback routing to deliver your html file
-app.get('*', (req, res) => {
+// Corrected wildcard syntax for Express v5 / Node v24 compatibility
+app.get('(.*)', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'number-imposter.html'));
 });
 
