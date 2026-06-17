@@ -4,17 +4,16 @@ const http = require('http').createServer(app);
 const io = require('socket.io')(http);
 const path = require('path');
 
-// 1. Establish absolute pathing to your public assets directory
-const publicPath = path.resolve(__dirname, 'public');
-app.use(express.static(publicPath));
+// 1. Serve static assets directly from your root directory
+app.use(express.static(__dirname));
 
-// 2. Safe Express v5 Fallback Middleware (replaces app.get('*'))
+// 2. Safe Express v5 Fallback Middleware looking at the main folder
 app.use((req, res, next) => {
   if (req.method === 'GET' && !req.path.includes('.')) {
-    return res.sendFile(path.join(publicPath, 'number-imposter.html'), (err) => {
+    return res.sendFile(path.join(__dirname, 'number-imposter.html'), (err) => {
       if (err) {
-        console.error("Error delivering main HTML matrix:", err);
-        res.status(404).send("File delivery fault. Verify folder contents layout.");
+        console.error("Error delivering main HTML:", err);
+        res.status(404).send("File delivery fault. HTML file missing from root directory.");
       }
     });
   }
@@ -67,7 +66,6 @@ function syncSevenClubsState(room) {
   room.players.forEach((p) => {
     const hand = room.sevenState.hands[p.id] || [];
     
-    // Evaluate which cards in their hand are legally playable
     const formattedHand = hand.map(card => {
       let isPlayable = false;
       const suitTrack = room.sevenState.board[card.suit];
@@ -84,7 +82,6 @@ function syncSevenClubsState(room) {
 
     const hasNoMoves = !formattedHand.some(c => c.isPlayable);
 
-    // Build the 3x4 Grid Matrix View data for client display
     const gridCells = [];
     let cellIndex = 1;
     SUITS.forEach(s => {
@@ -113,7 +110,6 @@ function syncSevenClubsState(room) {
 }
 
 function processNextSevenClubsTurn(room) {
-  // Check win condition: does any player have 0 cards left?
   for (let p of room.players) {
     if (room.sevenState.hands[p.id] && room.sevenState.hands[p.id].length === 0) {
       room.phase = 'result';
@@ -128,7 +124,6 @@ function processNextSevenClubsTurn(room) {
     }
   }
 
-  // Shift to next index turn cycle
   room.sevenState.activeIndex = (room.sevenState.activeIndex + 1) % room.players.length;
   syncSevenClubsState(room);
 }
@@ -180,7 +175,6 @@ io.on('connection', (socket) => {
     if (!room || socket.id !== room.hostId) return;
 
     if (room.gameMode === 'card') {
-      // Initialize Seven of Clubs State Machine
       let deck = buildStandardDeck();
       deck = shuffleDeck(deck);
 
@@ -195,7 +189,6 @@ io.on('connection', (socket) => {
         }
       };
 
-      // Deal all 52 cards equally among players
       let pIdx = 0;
       room.players.forEach(p => room.sevenState.hands[p.id] = []);
       while (deck.length > 0) {
@@ -204,7 +197,6 @@ io.on('connection', (socket) => {
         pIdx++;
       }
 
-      // Determine who has the 7 of Clubs to set turn index 0
       room.players.forEach((p, index) => {
         const hand = room.sevenState.hands[p.id];
         if (hand.some(c => c.suit === 'Clubs' && c.rank === '7')) {
@@ -216,21 +208,18 @@ io.on('connection', (socket) => {
       syncSevenClubsState(room);
 
     } else {
-      // Initialize Standard Imposter Core Logic Engine
       room.round = 1;
       room.answers = {};
       room.continueVotes = {};
       room.votes = {};
       room.tieBreakerActive = false;
 
-      // Establish core numbers depending on system mode selected
       if (room.gameMode === 'rj') {
         room.theNumber = Math.floor(Math.random() * 50) + 1;
       } else {
         room.theNumber = Math.floor(Math.random() * 10) + 1;
       }
 
-      // Assign Imposter role blindly
       const imposterIndex = Math.floor(Math.random() * room.players.length);
       room.players.forEach((p, idx) => {
         room.roles[p.id] = (idx === imposterIndex) ? 'imposter' : 'crewmate';
