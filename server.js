@@ -4,14 +4,18 @@ const http = require('http').createServer(app);
 const io = require('socket.io')(http);
 const path = require('path');
 
-app.use(express.static(path.join(__dirname, 'public')));
+// 1. Serve static assets safely from the absolute path
+const publicPath = path.resolve(__dirname, 'public');
+app.use(express.static(publicPath));
 
-// Express v5 absolute fallback matching middleware 
-app.use((req, res, next) => {
-  if (req.method === 'GET') {
-    return res.sendFile(path.join(__dirname, 'public', 'number-imposter.html'));
-  }
-  next();
+// 2. Clear routing fallback to ensure the file is always found
+app.get('*', (req, res) => {
+  res.sendFile(path.join(publicPath, 'number-imposter.html'), (err) => {
+    if (err) {
+      console.error("Error sending file:", err);
+      res.status(404).send("File not found on disk. Check your folder structure!");
+    }
+  });
 });
 
 const rooms = {};
@@ -200,12 +204,10 @@ io.on('connection', (socket) => {
       // Determine who has the 7 of Clubs to set turn index 0
       room.players.forEach((p, index) => {
         const hand = room.sevenState.hands[p.id];
-        if (hand.some(c => c.suit === 'Clubs' && cardValueToRank(c.value) === '7')) {
+        if (hand.some(c => c.suit === 'Clubs' && c.rank === '7')) {
           room.sevenState.activeIndex = index;
         }
       });
-
-      function cardValueToRank(v) { return RANKS[v - 1]; }
 
       room.phase = 'sevenClubsBoard';
       syncSevenClubsState(room);
@@ -220,9 +222,9 @@ io.on('connection', (socket) => {
 
       // Establish core numbers depending on system mode selected
       if (room.gameMode === 'rj') {
-        room.theNumber = Math.floor(Math.random() * 50) + 1; // 1-50 range
+        room.theNumber = Math.floor(Math.random() * 50) + 1;
       } else {
-        room.theNumber = Math.floor(Math.random() * 10) + 1; // 1-10 range
+        room.theNumber = Math.floor(Math.random() * 10) + 1;
       }
 
       // Assign Imposter role blindly
@@ -271,7 +273,7 @@ io.on('connection', (socket) => {
     }
 
     if (legal) {
-      hand.splice(cardIdx, 1); // Remove card from hand
+      hand.splice(cardIdx, 1);
       processNextSevenClubsTurn(room);
     }
   });
@@ -288,7 +290,6 @@ io.on('connection', (socket) => {
     let neighborHand = room.sevenState.hands[leftNeighbor.id] || [];
 
     if (neighborHand.length > 0) {
-      // Pick a random card from neighbor's hand as penalty
       const randIdx = Math.floor(Math.random() * neighborHand.length);
       const stolenCard = neighborHand.splice(randIdx, 1)[0];
       room.sevenState.hands[socket.id].push(stolenCard);
