@@ -4,18 +4,21 @@ const http = require('http').createServer(app);
 const io = require('socket.io')(http);
 const path = require('path');
 
-// 1. Serve static assets safely from the absolute path
+// 1. Establish absolute pathing to your public assets directory
 const publicPath = path.resolve(__dirname, 'public');
 app.use(express.static(publicPath));
 
-// 2. Clear routing fallback to ensure the file is always found
-app.get('*', (req, res) => {
-  res.sendFile(path.join(publicPath, 'number-imposter.html'), (err) => {
-    if (err) {
-      console.error("Error sending file:", err);
-      res.status(404).send("File not found on disk. Check your folder structure!");
-    }
-  });
+// 2. Safe Express v5 Fallback Middleware (replaces app.get('*'))
+app.use((req, res, next) => {
+  if (req.method === 'GET' && !req.path.includes('.')) {
+    return res.sendFile(path.join(publicPath, 'number-imposter.html'), (err) => {
+      if (err) {
+        console.error("Error delivering main HTML matrix:", err);
+        res.status(404).send("File delivery fault. Verify folder contents layout.");
+      }
+    });
+  }
+  next();
 });
 
 const rooms = {};
