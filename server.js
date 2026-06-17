@@ -1,23 +1,27 @@
 const express = require('express');
-const http = require('http');
-const { Server } = require('socket.io');
-const path = require('path');
-
 const app = express();
-const server = http.createServer(app);
-const io = new Server(server);
+const http = require('http').createServer(app);
+const io = require('socket.io')(http);
+const path = require('path');
 
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Core State Manager
+// Fallback routing to deliver your html file
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'number-imposter.html'));
+});
+
 const rooms = {};
 
-const SUITS = ['Clubs', 'Diamonds', 'Hearts', 'Spades'];
-const SUIT_ICONS = { Clubs: '♣', Diamonds: '♦', Hearts: '♥', Spades: '♠' };
+// Helper assets for Seven of Clubs
+const SUITS = [
+  { name: 'Clubs', icon: '♣️' },
+  { name: 'Diamonds', icon: '♦️' },
+  { name: 'Hearts', icon: '♥️' },
+  { name: 'Spades', icon: '♠️' }
+];
 const RANKS = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
-const RANK_VALUES = { 'A': 1, '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9, '10': 10, 'J': 11, 'Q': 12, 'K': 13 };
 
-// Utility function to generate unique codes
 function generateRoomCode() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let code = '';
@@ -27,18 +31,16 @@ function generateRoomCode() {
   return code;
 }
 
-// Full Deck Generation Utility
-function createStandardDeck() {
-  const deck = [];
-  SUITS.forEach(suit => {
-    RANKS.forEach(rank => {
-      deck.push({ suit, rank, val: RANK_VALUES[rank], suitIcon: SUIT_ICONS[suit] });
+function buildStandardDeck() {
+  let deck = [];
+  SUITS.forEach(s => {
+    RANKS.forEach((r, index) => {
+      deck.push({ suit: s.name, suitIcon: s.icon, rank: r, value: index + 1 });
     });
   });
   return deck;
 }
 
-// Shuffling Utility
 function shuffleDeck(deck) {
   for (let i = deck.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -47,471 +49,435 @@ function shuffleDeck(deck) {
   return deck;
 }
 
-// Helper to determine legitimate plays in Seven of Clubs
-function isValidMove(card, boardState) {
-  const suitState = boardState[card.suit];
-  
-  // If the suit hasn't started yet, only the 7 can open it
-  if (!suitState.hasSeven) {
-    return card.rank === '7';
-  }
-  
-  // If suit is open, card must be exactly 1 lower than min or 1 higher than max
-  return (card.val === suitState.min - 1) || (card.val === suitState.max + 1);
-}
+function syncSevenClubsState(room) {
+  const activePlayer = room.players[room.sevenState.activeIndex];
+  const leftNeighborIndex = (room.sevenState.activeIndex + 1) % room.players.length;
+  const leftNeighbor = room.players[leftNeighborIndex];
 
-// Builds the flat 12-item board list optimized for 3x4 layout columns
-function compileGridLayout(boardState) {
-  const cells = [];
-  let currentCellIndex = 1;
-
-  SUITS.forEach(suit => {
-    const state = boardState[suit];
+  room.players.forEach((p) => {
+    const hand = room.sevenState.hands[p.id] || [];
     
-    // Left Half Sequence Display (Row for each suit)
-    cells.push({
-      row: currentCellIndex,
-      col: 1,
-      hasSuit: state.hasSeven,
-      displayValue: state.hasSeven ? `A - 6 (${suit.substring(0,1)})` : `Empty ${suit}`
-    });
-    
-    // Middle Center 7s Display
-    cells.push({
-      row: currentCellIndex,
-      col: 2,
-      hasSuit: state.hasSeven,
-      displayValue: state.hasSeven ? `7 of ${suit}` : `Locked 7♣`
+    // Evaluate which cards in their hand are legally playable
+    const formattedHand = hand.map(card => {
+      let isPlayable = false;
+      const suitTrack = room.sevenState.board[card.suit];
+
+      if (card.rank === '7') {
+        isPlayable = true;
+      } else if (suitTrack.placed) {
+        if (card.value === suitTrack.min - 1 || card.value === suitTrack.max + 1) {
+          isPlayable = true;
+        }
+      }
+      return { ...card, isPlayable };
     });
 
-    // Right Half Sequence Display
-    cells.push({
-      row: currentCellIndex,
-      col: 3,
-      hasSuit: state.hasSeven,
-      displayValue: state.hasSeven ? `8 - K (${suit.substring(0,1)})` : `Empty ${suit}`
+    const hasNoMoves = !formattedHand.some(c => c.isPlayable);
+
+    // Build the 3x4 Grid Matrix View data for client display
+    const gridCells = [];
+    let cellIndex = 1;
+    SUITS.forEach(s => {
+      const track = room.sevenState.board[s.name];
+      if (track.placed) {
+        gridCells.push({ row: cellIndex, col: 1, hasSuit: true, displayValue: `${track.min === 7 ? '' : '... '}${RANKS[track.min - 1]}` });
+        gridCells.push({ row: cellIndex, col: 2, hasSuit: true, displayValue: `7 ${s.icon}` });
+        gridCells.push({ row: cellIndex, col: 3, hasSuit: true, displayValue: `${track.max === 7 ? '' : RANKS[track.max - 1]} ...` });
+      } else {
+        gridCells.push({ row: cellIndex, col: 1, hasSuit: false, displayValue: '—' });
+        gridCells.push({ row: cellIndex, col: 2, hasSuit: false, displayValue: `(7 of ${s.name})` });
+        gridCells.push({ row: cellIndex, col: 3, hasSuit: false, displayValue: '—' });
+      }
+      cellIndex++;
     });
 
-    currentCellIndex++;
+    io.to(p.id).emit('sevenClubsUpdateBoard', {
+      activePlayerId: activePlayer.id,
+      activePlayerName: activePlayer.name,
+      myHand: formattedHand,
+      gridCells: gridCells,
+      hasNoMoves: hasNoMoves,
+      neighborCardCount: (room.sevenState.hands[leftNeighbor.id] || []).length
+    });
   });
-
-  return cells;
 }
 
+function processNextSevenClubsTurn(room) {
+  // Check win condition: does any player have 0 cards left?
+  for (let p of room.players) {
+    if (room.sevenState.hands[p.id] && room.sevenState.hands[p.id].length === 0) {
+      room.phase = 'result';
+      io.to(room.code).emit('goToResultScreen', {
+        gameOverReason: `🏆 CONGRATULATIONS! ${p.name} has played all cards and won the game!`,
+        roles: {},
+        theNumber: null,
+        voteTally: {},
+        tieBreakerActive: false
+      });
+      return;
+    }
+  }
+
+  // Shift to next index turn cycle
+  room.sevenState.activeIndex = (room.sevenState.activeIndex + 1) % room.players.length;
+  syncSevenClubsState(room);
+}
+
+// ─── SOCKET CONNECTION ROUTER ─────────────────────────────────
 io.on('connection', (socket) => {
 
-  // 1. CREATE LOBBY HANDLER
   socket.on('createRoom', ({ playerName, gameMode }) => {
     const roomCode = generateRoomCode();
     rooms[roomCode] = {
       code: roomCode,
       hostId: socket.id,
       gameMode: gameMode || 'number',
+      players: [{ id: socket.id, name: playerName }],
       phase: 'lobby',
-      players: [{ id: socket.id, name: playerName, hand: [], ready: false }],
+      round: 1,
       roles: {},
       theNumber: null,
+      readyPlayers: {},
       turnOrder: [],
-      activeTurnIndex: 0,
-      round: 1,
+      currentTurnIndex: 0,
       answers: {},
       continueVotes: {},
-      playerVotes: {},
-      failedImposterGuess: null,
-      sevenClubsState: {
-        board: {
-          Clubs: { hasSeven: false, min: 7, max: 7 },
-          Diamonds: { hasSeven: false, min: 7, max: 7 },
-          Hearts: { hasSeven: false, min: 7, max: 7 },
-          Spades: { hasSeven: false, min: 7, max: 7 }
-        },
-        gameStarted: false
-      }
+      votes: {},
+      tieBreakerActive: false,
+      sevenState: null
     };
-
     socket.join(roomCode);
     socket.emit('roomUpdated', rooms[roomCode]);
   });
 
-  // 2. JOIN EXISTING LOBBY HANDLER
   socket.on('joinRoom', ({ roomCode, playerName }) => {
     const room = rooms[roomCode];
     if (!room) {
-      return socket.emit('errorMsg', 'Lobby not found. Verify the room code.');
+      socket.emit('errorMsg', 'Lobby matrix code invalid or missing!');
+      return;
     }
     if (room.phase !== 'lobby') {
-      return socket.emit('errorMsg', 'Game has already started.');
+      socket.emit('errorMsg', 'Deployment currently locked in an active round context.');
+      return;
     }
-
-    room.players.push({ id: socket.id, name: playerName, hand: [], ready: false });
+    room.players.push({ id: socket.id, name: playerName });
     socket.join(roomCode);
     io.to(roomCode).emit('roomUpdated', room);
   });
 
-  // 3. START GAME TRIGGER
   socket.on('startGame', ({ roomCode }) => {
     const room = rooms[roomCode];
-    if (!room || room.hostId !== socket.id) return;
+    if (!room || socket.id !== room.hostId) return;
 
     if (room.gameMode === 'card') {
-      // ♣️ SEVEN OF CLUBS INITIALIZATION
-      room.phase = 'sevenClubsBoard';
-      
-      let deck = createStandardDeck();
+      // Initialize Seven of Clubs State Machine
+      let deck = buildStandardDeck();
       deck = shuffleDeck(deck);
 
-      // Deal all cards evenly to players
+      room.sevenState = {
+        activeIndex: 0,
+        hands: {},
+        board: {
+          Clubs: { placed: false, min: 7, max: 7 },
+          Diamonds: { placed: false, min: 7, max: 7 },
+          Hearts: { placed: false, min: 7, max: 7 },
+          Spades: { placed: false, min: 7, max: 7 }
+        }
+      };
+
+      // Deal all 52 cards equally among players
       let pIdx = 0;
+      room.players.forEach(p => room.sevenState.hands[p.id] = []);
       while (deck.length > 0) {
-        room.players[pIdx % room.players.length].hand.push(deck.pop());
+        const p = room.players[pIdx % room.players.length];
+        room.sevenState.hands[p.id].push(deck.pop());
         pIdx++;
       }
 
-      // Determine who starts with the 7 of Clubs
-      let startingPlayerIndex = 0;
-      room.players.forEach((p, idx) => {
-        const hasSevenClubs = p.hand.some(c => c.suit === 'Clubs' && c.rank === '7');
-        if (hasSevenClubs) {
-          startingPlayerIndex = idx;
+      // Determine who has the 7 of Clubs to set turn index 0
+      room.players.forEach((p, index) => {
+        const hand = room.sevenState.hands[p.id];
+        if (hand.some(c => c.suit === 'Clubs' && cardValueToRank(c.value) === '7')) {
+          room.sevenState.activeIndex = index;
         }
       });
 
-      room.activeTurnIndex = startingPlayerIndex;
-      broadcastSevenClubsState(room);
+      function cardValueToRank(v) { return RANKS[v - 1]; }
+
+      room.phase = 'sevenClubsBoard';
+      syncSevenClubsState(room);
 
     } else {
-      // 🔢 STANDARD IMPOSTER SETUP
-      room.phase = 'role';
-      room.theNumber = Math.floor(Math.random() * 10) + 1;
+      // Initialize Standard Imposter Core Logic Engine
+      room.round = 1;
+      room.answers = {};
+      room.continueVotes = {};
+      room.votes = {};
+      room.tieBreakerActive = false;
 
-      // Assign Imposter role randomly
+      // Establish core numbers depending on system mode selected
+      if (room.gameMode === 'rj') {
+        room.theNumber = Math.floor(Math.random() * 50) + 1; // 1-50 range
+      } else {
+        room.theNumber = Math.floor(Math.random() * 10) + 1; // 1-10 range
+      }
+
+      // Assign Imposter role blindly
       const imposterIndex = Math.floor(Math.random() * room.players.length);
       room.players.forEach((p, idx) => {
         room.roles[p.id] = (idx === imposterIndex) ? 'imposter' : 'crewmate';
-        p.ready = false;
       });
 
+      room.readyPlayers = {};
+      room.phase = 'role';
       io.to(roomCode).emit('goToRoleScreen', room);
     }
   });
 
-  // ♣️ SEVEN OF CLUBS GAMEPLAY EVENT: PLAY CARD
+  /* ♣️ SEVEN OF CLUBS ACTION DRIVERS */
   socket.on('sevenClubsPlayCard', ({ roomCode, suit, rank }) => {
     const room = rooms[roomCode];
     if (!room || room.phase !== 'sevenClubsBoard') return;
 
-    const activePlayer = room.players[room.activeTurnIndex];
+    const activePlayer = room.players[room.sevenState.activeIndex];
     if (socket.id !== activePlayer.id) return;
 
-    // Find card in hand
-    const cardIndex = activePlayer.hand.findIndex(c => c.suit === suit && c.rank === rank);
-    if (cardIndex === -1) return;
+    let hand = room.sevenState.hands[socket.id] || [];
+    const cardIdx = hand.findIndex(c => c.suit === suit && c.rank === rank);
+    if (cardIdx === -1) return;
 
-    const card = activePlayer.hand[cardIndex];
-    const targetSuitState = room.sevenClubsState.board[suit];
-
-    if (!isValidMove(card, room.sevenClubsState.board)) {
-      return socket.emit('errorMsg', 'Illegal move sequence placement.');
-    }
-
-    // Apply card to board state
-    activePlayer.hand.splice(cardIndex, 1);
-    let earnedBonusTurn = false;
+    const card = hand[cardIdx];
+    const suitTrack = room.sevenState.board[suit];
+    let legal = false;
 
     if (card.rank === '7') {
-      targetSuitState.hasSeven = true;
-      targetSuitState.min = 7;
-      targetSuitState.max = 7;
-    } else if (card.val < 7) {
-      targetSuitState.min = card.val;
-      if (card.rank === 'A') earnedBonusTurn = true; // Completed lower half bonus
-    } else if (card.val > 7) {
-      targetSuitState.max = card.val;
-      if (card.rank === 'K') earnedBonusTurn = true; // Completed upper half bonus
+      if (!suitTrack.placed) {
+        suitTrack.placed = true;
+        suitTrack.min = 7;
+        suitTrack.max = 7;
+        legal = true;
+      }
+    } else if (suitTrack.placed) {
+      if (card.value === suitTrack.min - 1) {
+        suitTrack.min = card.value;
+        legal = true;
+      } else if (card.value === suitTrack.max + 1) {
+        suitTrack.max = card.value;
+        legal = true;
+      }
     }
 
-    // Check Win Condition
-    if (activePlayer.hand.length === 0) {
-      room.phase = 'result';
-      io.to(roomCode).emit('goToResultScreen', {
-        gameOverReason: `🎉 ${activePlayer.name} won by running out of cards first!`,
-        voteTally: {}
-      });
-      return;
+    if (legal) {
+      hand.splice(cardIdx, 1); // Remove card from hand
+      processNextSevenClubsTurn(room);
     }
-
-    // Advance turn if no bonus turn earned
-    if (!earnedBonusTurn) {
-      room.activeTurnIndex = (room.activeTurnIndex + 1) % room.players.length;
-    }
-
-    broadcastSevenClubsState(room);
   });
 
-  // ♣️ SEVEN OF CLUBS GAMEPLAY EVENT: NO MOVES PENALTY (DRAW FROM NEIGHBOR ON LEFT)
   socket.on('sevenClubsPickFromNeighbor', ({ roomCode }) => {
     const room = rooms[roomCode];
     if (!room || room.phase !== 'sevenClubsBoard') return;
 
-    const activePlayer = room.players[room.activeTurnIndex];
+    const activePlayer = room.players[room.sevenState.activeIndex];
     if (socket.id !== activePlayer.id) return;
 
-    // Verify player actually has no moves before letting them draw
-    const currentMoves = activePlayer.hand.filter(c => isValidMove(c, room.sevenClubsState.board));
-    if (currentMoves.length > 0) {
-      return socket.emit('errorMsg', 'You have valid cards you can play!');
+    const leftNeighborIndex = (room.sevenState.activeIndex + 1) % room.players.length;
+    const leftNeighbor = room.players[leftNeighborIndex];
+    let neighborHand = room.sevenState.hands[leftNeighbor.id] || [];
+
+    if (neighborHand.length > 0) {
+      // Pick a random card from neighbor's hand as penalty
+      const randIdx = Math.floor(Math.random() * neighborHand.length);
+      const stolenCard = neighborHand.splice(randIdx, 1)[0];
+      room.sevenState.hands[socket.id].push(stolenCard);
+
+      processNextSevenClubsTurn(room);
     }
-
-    // Neighbor to the left is the next player in index sequence
-    const neighborIndex = (room.activeTurnIndex + 1) % room.players.length;
-    const neighborPlayer = room.players[neighborIndex];
-
-    if (neighborPlayer.hand.length > 0) {
-      // Blindly draw a random card from neighbor's hand
-      const randomIdx = Math.floor(Math.random() * neighborPlayer.hand.length);
-      const stolenCard = neighborPlayer.hand.splice(randomIdx, 1)[0];
-      activePlayer.hand.push(stolenCard);
-    }
-
-    // End turn after penalty draw
-    room.activeTurnIndex = (room.activeTurnIndex + 1) % room.players.length;
-    broadcastSevenClubsState(room);
   });
 
-  // Helper broadcast routine for card state updates
-  function broadcastSevenClubsState(room) {
-    const activePlayer = room.players[room.activeTurnIndex];
-    const neighborIndex = (room.activeTurnIndex + 1) % room.players.length;
-    const neighborPlayer = room.players[neighborIndex];
-
-    const gridLayout = compileGridLayout(room.sevenClubsState.board);
-
-    room.players.forEach(p => {
-      // Evaluate options relative to each player's specific hand
-      const evaluatedHand = p.hand.map(c => ({
-        ...c,
-        isPlayable: (p.id === activePlayer.id) && isValidMove(c, room.sevenClubsState.board)
-      }));
-
-      const activeHasNoMoves = p.id === activePlayer.id && !evaluatedHand.some(c => c.isPlayable);
-
-      io.to(p.id).emit('sevenClubsUpdateBoard', {
-        activePlayerId: activePlayer.id,
-        activePlayerName: activePlayer.name,
-        gridCells: gridLayout,
-        myHand: evaluatedHand,
-        hasNoMoves: activeHasNoMoves,
-        neighborCardCount: neighborPlayer ? neighborPlayer.hand.length : 0
-      });
-    });
-  }
-
-  // 4. IMPOSTER GAME MECHANICS: READY TRANSITION
+  /* 🔢 IMPOSTER MECHANICS TURN ENGINE */
   socket.on('playerReady', ({ roomCode }) => {
     const room = rooms[roomCode];
     if (!room) return;
+    room.readyPlayers[socket.id] = true;
+    io.to(roomCode).emit('readyListUpdated', room.readyPlayers);
 
-    const player = room.players.find(p => p.id === socket.id);
-    if (player) player.ready = true;
-
-    const readyMap = {};
-    room.players.forEach(p => { readyMap[p.id] = p.ready; });
-    io.to(roomCode).emit('readyListUpdated', readyMap);
-
-    if (room.players.every(p => p.ready)) {
+    if (room.players.every(p => room.readyPlayers[p.id])) {
       room.turnOrder = [...room.players];
-      // Shuffle turn ordering for the reveal step
       for (let i = room.turnOrder.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
         [room.turnOrder[i], room.turnOrder[j]] = [room.turnOrder[j], room.turnOrder[i]];
       }
+      room.currentTurnIndex = 0;
+      room.answers[room.round] = {};
       room.phase = 'turnReveal';
       io.to(roomCode).emit('goToTurnRevealScreen', room);
     }
   });
 
-  // 5. PHASE SHIFT EVENT ROUTER
   socket.on('startAnswering', ({ roomCode }) => {
     const room = rooms[roomCode];
-    if (!room || room.hostId !== socket.id) return;
-
+    if (!room || socket.id !== room.hostId) return;
     room.phase = 'answer';
-    room.activeTurnIndex = 0;
-    if (!room.answers[room.round]) room.answers[room.round] = {};
-
     io.to(roomCode).emit('goToAnswerScreen', room);
-    sendActiveTurnNotification(room);
+
+    const activePlayer = room.turnOrder[room.currentTurnIndex];
+    io.to(roomCode).emit('nextTurnIndex', { activePlayerId: activePlayer.id, activePlayerName: activePlayer.name });
   });
 
   socket.on('submitClue', ({ roomCode, clueWord }) => {
     const room = rooms[roomCode];
-    if (!room || room.phase !== 'answer') return;
+    if (!room) return;
 
-    const expectedPlayer = room.turnOrder[room.activeTurnIndex];
-    if (socket.id !== expectedPlayer.id) return;
+    const activePlayer = room.turnOrder[room.currentTurnIndex];
+    if (socket.id !== activePlayer.id) return;
 
     room.answers[room.round][socket.id] = clueWord;
-
     io.to(roomCode).emit('clueRevealedLive', {
       playerId: socket.id,
-      playerName: expectedPlayer.name,
+      playerName: activePlayer.name,
       clueWord: clueWord,
       roundAnswers: room.answers[room.round]
     });
 
-    room.activeTurnIndex++;
-    if (room.activeTurnIndex >= room.turnOrder.length) {
-      io.to(roomCode).emit('showAllClues', room);
+    room.currentTurnIndex++;
+    if (room.currentTurnIndex < room.turnOrder.length) {
+      const nextPlayer = room.turnOrder[room.currentTurnIndex];
+      io.to(roomCode).emit('nextTurnIndex', { activePlayerId: nextPlayer.id, activePlayerName: nextPlayer.name });
     } else {
-      sendActiveTurnNotification(room);
+      io.to(roomCode).emit('showAllClues', room);
     }
   });
 
-  function sendActiveTurnNotification(room) {
-    const target = room.turnOrder[room.activeTurnIndex];
-    io.to(room.code).emit('nextTurnIndex', { activePlayerId: target.id, activePlayerName: target.name });
-  }
+  socket.on('imposterGuessNumber', ({ roomCode, guessedNumber }) => {
+    const room = rooms[roomCode];
+    if (!room || room.roles[socket.id] !== 'imposter') return;
+
+    if (parseInt(guessedNumber) === room.theNumber) {
+      room.phase = 'result';
+      io.to(roomCode).emit('goToResultScreen', {
+        gameOverReason: "💥 IMPOSTER VICTORY! The Imposter intercepted the target sequence code accurately!",
+        roles: room.roles,
+        theNumber: room.theNumber,
+        voteTally: {},
+        tieBreakerActive: false
+      });
+    } else {
+      room.phase = 'result';
+      io.to(roomCode).emit('goToResultScreen', {
+        gameOverReason: "🛡️ CREWMATE VICTORY! The Imposter attempted a blind guess profile hack and failed!",
+        roles: room.roles,
+        theNumber: room.theNumber,
+        voteTally: {},
+        tieBreakerActive: false,
+        failedImposterGuess: guessedNumber
+      });
+    }
+  });
 
   socket.on('nextPhase', ({ roomCode, targetPhase }) => {
     const room = rooms[roomCode];
-    if (!room || room.hostId !== socket.id) return;
+    if (!room || socket.id !== room.hostId) return;
 
     if (targetPhase === 'round2') {
       room.round = 2;
-      room.phase = 'answer';
-      room.activeTurnIndex = 0;
-      if (!room.answers[room.round]) room.answers[room.round] = {};
-      io.to(roomCode).emit('goToAnswerScreen', room);
-      sendActiveTurnNotification(room);
+      room.currentTurnIndex = 0;
+      room.answers[room.round] = {};
+      room.readyPlayers = {};
+      room.phase = 'turnReveal';
+      io.to(roomCode).emit('goToTurnRevealScreen', room);
     } else if (targetPhase === 'askContinue') {
-      room.phase = 'continueVote';
       room.continueVotes = {};
+      room.phase = 'continueVote';
       io.to(roomCode).emit('promptContinueVote');
     } else if (targetPhase === 'vote') {
-      initiateVotingPhase(roomCode);
+      room.votes = {};
+      room.phase = 'vote';
+      io.to(roomCode).emit('goToVoteScreen', room);
+    } else if (targetPhase === 'tiebreakerRound') {
+      room.round++;
+      room.currentTurnIndex = 0;
+      room.answers[room.round] = {};
+      room.phase = 'answer';
+      io.to(roomCode).emit('goToAnswerScreen', room);
+      const activePlayer = room.turnOrder[room.currentTurnIndex];
+      io.to(roomCode).emit('nextTurnIndex', { activePlayerId: activePlayer.id, activePlayerName: activePlayer.name });
     }
   });
 
   socket.on('submitContinueChoice', ({ roomCode, choice }) => {
     const room = rooms[roomCode];
-    if (!room || room.phase !== 'continueVote') return;
-
+    if (!room) return;
     room.continueVotes[socket.id] = choice;
     io.to(roomCode).emit('continueStatusUpdated', room.continueVotes);
 
-    if (Object.keys(room.continueVotes).length === room.players.length) {
-      let moreCount = 0;
-      let voteCount = 0;
-      Object.values(room.continueVotes).forEach(v => {
-        if (v === 'more') moreCount++;
-        else voteCount++;
-      });
-
-      if (moreCount >= voteCount) {
+    if (room.players.every(p => room.continueVotes[p.id])) {
+      const moreCount = Object.values(room.continueVotes).filter(v => v === 'more').length;
+      if (moreCount > room.players.length / 2) {
         room.round++;
-        room.phase = 'answer';
-        room.activeTurnIndex = 0;
+        room.currentTurnIndex = 0;
         room.answers[room.round] = {};
-        io.to(roomCode).emit('goToAnswerScreen', room);
-        sendActiveTurnNotification(room);
+        room.phase = 'turnReveal';
+        io.to(roomCode).emit('goToTurnRevealScreen', room);
       } else {
-        initiateVotingPhase(roomCode);
+        room.votes = {};
+        room.phase = 'vote';
+        io.to(roomCode).emit('goToVoteScreen', room);
       }
     }
   });
-
-  function initiateVotingPhase(roomCode) {
-    const room = rooms[roomCode];
-    room.phase = 'vote';
-    room.playerVotes = {};
-    io.to(roomCode).emit('goToVoteScreen', room);
-  }
 
   socket.on('castVote', ({ roomCode, targetPlayerId }) => {
     const room = rooms[roomCode];
-    if (!room || room.phase !== 'vote') return;
+    if (!room) return;
+    room.votes[socket.id] = targetPlayerId;
+    io.to(roomCode).emit('voteStatusUpdated', room.votes);
 
-    room.playerVotes[socket.id] = targetPlayerId;
-    io.to(roomCode).emit('voteStatusUpdated', room.playerVotes);
+    if (room.players.every(p => room.votes[p.id])) {
+      const tally = {};
+      room.players.forEach(p => tally[p.id] = 0);
+      Object.values(room.votes).forEach(target => {
+        if (tally[target] !== undefined) tally[target]++;
+      });
 
-    if (Object.keys(room.playerVotes).length === room.players.length) {
-      processVoteResults(room);
-    }
-  });
+      let highestVotes = -1;
+      let topVotedPlayers = [];
+      Object.keys(tally).forEach(pId => {
+        if (tally[pId] > highestVotes) {
+          highestVotes = tally[pId];
+          topVotedPlayers = [pId];
+        } else if (tally[pId] === highestVotes) {
+          topVotedPlayers.push(pId);
+        }
+      });
 
-  function processVoteResults(room) {
-    const tally = {};
-    room.players.forEach(p => { tally[p.id] = 0; });
-    Object.values(room.playerVotes).forEach(target => {
-      if (tally[target] !== undefined) tally[target]++;
-    });
+      if (topVotedPlayers.length > 1) {
+        room.tieBreakerActive = true;
+        room.phase = 'result';
+        io.to(roomCode).emit('goToResultScreen', {
+          gameOverReason: "⚖️ TIE ENCOUNTERED! Voting metrics split evenly. Initiating host tiebreaker round...",
+          roles: room.roles,
+          theNumber: room.theNumber,
+          voteTally: tally,
+          tieBreakerActive: true
+        });
+      } else {
+        const accusedId = topVotedPlayers[0];
+        const isImposter = (room.roles[accusedId] === 'imposter');
+        room.phase = 'result';
+        room.tieBreakerActive = false;
 
-    let maxVotes = -1;
-    let candidates = [];
-    Object.keys(tally).forEach(id => {
-      if (tally[id] > maxVotes) {
-        maxVotes = tally[id];
-        candidates = [id];
-      } else if (tally[id] === maxVotes) {
-        candidates.push(id);
+        const reason = isImposter 
+          ? "🛡️ CREWMATE VICTORY! The network correctly identified and ejected the profile match imposter!"
+          : "💥 IMPOSTER VICTORY! An innocent profile agent was exiled from the station architecture!";
+
+        io.to(roomCode).emit('goToResultScreen', {
+          gameOverReason: reason,
+          roles: room.roles,
+          theNumber: room.theNumber,
+          voteTally: tally,
+          tieBreakerActive: false
+        });
       }
-    });
-
-    room.voteTally = tally;
-    room.phase = 'result';
-
-    if (candidates.length > 1) {
-      room.tieBreakerActive = true;
-      io.to(room.code).emit('goToResultScreen', {
-        gameOverReason: "👔 Tie-breaker scenario! Host must initiate an emergency round.",
-        voteTally: tally,
-        tieBreakerActive: true
-      });
-    } else {
-      const votedOutId = candidates[0];
-      const isImposter = room.roles[votedOutId] === 'imposter';
-      room.tieBreakerActive = false;
-
-      const msg = isImposter 
-        ? "🟢 Crewmates Win! The Imposter was successfully voted out!" 
-        : "🔴 Imposter Wins! An innocent Crewmate was voted out!";
-
-      io.to(room.code).emit('goToResultScreen', {
-        gameOverReason: msg,
-        voteTally: tally,
-        roles: room.roles,
-        theNumber: room.theNumber,
-        tieBreakerActive: false
-      });
-    }
-  }
-
-  // CLANDESTINE IMPOSTER HOTKEYS
-  socket.on('imposterGuessNumber', ({ roomCode, guessedNumber }) => {
-    const room = rooms[roomCode];
-    if (!room || room.roles[socket.id] !== 'imposter' || room.phase === 'result') return;
-
-    const parsed = parseInt(guessedNumber);
-    room.phase = 'result';
-    room.tieBreakerActive = false;
-
-    if (parsed === room.theNumber) {
-      io.to(roomCode).emit('goToResultScreen', {
-        gameOverReason: "💥 Imposter Wins via instant precise guess!",
-        voteTally: room.voteTally || {},
-        roles: room.roles,
-        theNumber: room.theNumber,
-        tieBreakerActive: false
-      });
-    } else {
-      io.to(roomCode).emit('goToResultScreen', {
-        gameOverReason: "🟢 Crewmates Win! The Imposter guessed incorrectly and blew their cover!",
-        voteTally: room.voteTally || {},
-        roles: room.roles,
-        theNumber: room.theNumber,
-        failedImposterGuess: parsed,
-        tieBreakerActive: false
-      });
     }
   });
 
@@ -519,34 +485,30 @@ io.on('connection', (socket) => {
     const room = rooms[roomCode];
     if (!room) return;
     room.phase = 'lobby';
-    room.players.forEach(p => { p.hand = []; p.ready = false; });
     room.roles = {};
+    room.theNumber = null;
+    room.turnOrder = [];
     room.answers = {};
+    room.votes = {};
     room.continueVotes = {};
-    room.playerVotes = {};
-    room.failedImposterGuess = null;
-    room.sevenClubsState.board = {
-      Clubs: { hasSeven: false, min: 7, max: 7 },
-      Diamonds: { hasSeven: false, min: 7, max: 7 },
-      Hearts: { hasSeven: false, min: 7, max: 7 },
-      Spades: { hasSeven: false, min: 7, max: 7 }
-    };
+    room.tieBreakerActive = false;
+    room.sevenState = null;
     io.to(roomCode).emit('roomUpdated', room);
   });
 
   socket.on('disconnect', () => {
-    Object.keys(rooms).forEach(code => {
-      const room = rooms[code];
-      const pIdx = room.players.findIndex(p => p.id === socket.id);
-      if (pIdx !== -1) {
-        room.players.splice(pIdx, 1);
+    Object.keys(rooms).forEach(roomCode => {
+      const room = rooms[roomCode];
+      const index = room.players.findIndex(p => p.id === socket.id);
+      if (index !== -1) {
+        room.players.splice(index, 1);
         if (room.players.length === 0) {
-          delete rooms[code];
+          delete rooms[roomCode];
         } else {
           if (room.hostId === socket.id) {
             room.hostId = room.players[0].id;
           }
-          io.to(code).emit('roomUpdated', room);
+          io.to(roomCode).emit('roomUpdated', room);
         }
       }
     });
@@ -555,6 +517,6 @@ io.on('connection', (socket) => {
 });
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-  console.log(`Server listening on standard port ${PORT}`);
+http.listen(PORT, () => {
+  console.log(`Game engine operational and logging metrics on port ${PORT}`);
 });
