@@ -124,41 +124,90 @@ function syncSevenClubsState(room) {
       cellIndex++;
     });
 
+    // Find out how many cards the left neighbor has left
+    let currentIdx = room.players.findIndex(pl => pl.id === p.id);
+    let neighborCardCount = 0;
+    
+    // Cycle around the loop to find the next player who actually has cards left to draw from
+    for (let i = 1; i < room.players.length; i++) {
+      let checkIdx = (currentIdx + i) % room.players.length;
+      let checkPlayer = room.players[checkIdx];
+      let checkHand = room.sevenState.hands[checkPlayer.id] || [];
+      if (checkHand.length > 0) {
+        neighborCardCount = checkHand.length;
+        break;
+      }
+    }
+
     io.to(p.id).emit('sevenClubsUpdateBoard', {
       activePlayerId: activePlayer.id,
       activePlayerName: activePlayer.name,
       myHand: formattedHand,
       gridCells: gridCells,
       hasNoMoves: hasNoMoves,
-      playerCardCounts: playerCardCounts
+      playerCardCounts: playerCardCounts,
+      neighborCardCount: neighborCardCount
     });
   });
 }
 
 function processNextSevenClubsTurn(room, lastPlayedRank) {
-  // Check win condition: does any player have 0 cards left?
-  for (let p of room.players) {
-    if (room.sevenState.hands[p.id] && room.sevenState.hands[p.id].length === 0) {
-      room.phase = 'result';
-      io.to(room.code).emit('goToResultScreen', {
-        gameOverReason: `🏆 CONGRATULATIONS! ${p.name} has played all cards and won the game!`,
-        roles: {},
-        theNumber: null,
-        voteTally: {},
-        tieBreakerActive: false
-      });
-      return;
+  // Check if anyone just ran out of cards and add them to winners if not already there
+  room.players.forEach(p => {
+    const cardsLeft = (room.sevenState.hands[p.id] || []).length;
+    if (cardsLeft === 0 && !room.sevenState.winners.includes(p.name)) {
+      room.sevenState.winners.push(p.name);
     }
+  });
+
+  // Count how many people still have cards remaining in their hand
+  let activeHandsCount = 0;
+  room.players.forEach(p => {
+    if ((room.sevenState.hands[p.id] || []).length > 0) {
+      activeHandsCount++;
+    }
+  });
+
+  // End Game Terminal condition: If 1 or fewer players have cards left, the game stops
+  if (activeHandsCount <= 1) {
+    room.phase = 'result';
+    
+    // Build a leaderboard sequence listing the winners in order
+    let winReason = "🏆 GAME COMPLETED! Here are the placements:\n";
+    room.sevenState.winners.forEach((name, idx) => {
+      winReason += `${idx + 1}st Place: ${name} | `;
+    });
+    
+    // Add the remaining person holding cards to the bottom of the list
+    room.players.forEach(p => {
+      if (!room.sevenState.winners.includes(p.name)) {
+        winReason += `Last Place: ${p.name}`;
+      }
+    });
+
+    io.to(room.code).emit('goToResultScreen', {
+      gameOverReason: winReason,
+      roles: {},
+      theNumber: null,
+      voteTally: {},
+      tieBreakerActive: false
+    });
+    return;
   }
 
-  // Rule Check: If they played an Ace ('A') or a King ('K'), they get another turn!
-  if (lastPlayedRank === 'A' || lastPlayedRank === 'K') {
+  // Bonus Turn Condition: If they played an Ace or a King, and they STILL have cards, they go again
+  if ((lastPlayedRank === 'A' || lastPlayedRank === 'K') && (room.sevenState.hands[room.players[room.sevenState.activeIndex].id] || []).length > 0) {
     const activePlayer = room.players[room.sevenState.activeIndex];
     io.to(room.code).emit('gameLogNotice', `⚡ ${activePlayer.name} gets an extra turn for playing a ${lastPlayedRank}!`);
     syncSevenClubsState(room);
   } else {
-    // Normal turn progression
-    room.sevenState.activeIndex = (room.sevenState.activeIndex + 1) % room.players.length;
+    // Standard progression: Cycle turn until we land on someone who still holds cards
+    let nextIndex = room.sevenState.activeIndex;
+    do {
+      nextIndex = (nextIndex + 1) % room.players.length;
+    } while ((room.sevenState.hands[room.players[nextIndex].id] || []).length === 0);
+
+    room.sevenState.activeIndex = nextIndex;
     syncSevenClubsState(room);
   }
 }
@@ -216,6 +265,7 @@ io.on('connection', (socket) => {
       room.sevenState = {
         activeIndex: 0,
         hands: {},
+        winners: [], // Keeps track of players who finished their cards
         board: {
           Clubs: { placed: false, min: 7, max: 7 },
           Diamonds: { placed: false, min: 7, max: 7 },
@@ -232,7 +282,7 @@ io.on('connection', (socket) => {
         pIdx++;
       }
 
-      // CRITICAL FIX: Establish player holding the exact "7 of Clubs" to begin turn index 0
+      // Establish player holding the exact "7 of Clubs" to begin turn index
       room.players.forEach((p, index) => {
         const hand = room.sevenState.hands[p.id];
         if (hand.some(c => c.suit === 'Clubs' && c.rank === '7')) {
@@ -313,16 +363,29 @@ io.on('connection', (socket) => {
     const activePlayer = room.players[room.sevenState.activeIndex];
     if (socket.id !== activePlayer.id) return;
 
-    const leftNeighborIndex = (room.sevenState.activeIndex + 1) % room.players.length;
-    const leftNeighbor = room.players[leftNeighborIndex];
-    let neighborHand = room.sevenState.hands[leftNeighbor.id] || [];
+    // Dynamically calculate the next left neighbor clockwise who still has cards
+    let currentIdx = room.sevenState.activeIndex;
+    let targetNeighborId = null;
+    let neighborHand = [];
 
-    if (neighborHand.length > 0) {
+    for (let i = 1; i < room.players.length; i++) {
+      let nextIdx = (currentIdx + i) % room.players.length;
+      let possibleNeighbor = room.players[nextIdx];
+      let possibleHand = room.sevenState.hands[possibleNeighbor.id] || [];
+      if (possibleHand.length > 0) {
+        targetNeighborId = possibleNeighbor.id;
+        neighborHand = possibleHand;
+        break;
+      }
+    }
+
+    // Transfer the stolen card if a neighbor with cards exists
+    if (targetNeighborId && neighborHand.length > 0) {
       const randIdx = Math.floor(Math.random() * neighborHand.length);
       const stolenCard = neighborHand.splice(randIdx, 1)[0];
       room.sevenState.hands[socket.id].push(stolenCard);
 
-      // Passing or drawing counts as a standard non-bonus card action sequence
+      // Force the turn index to pass onwards to the next valid person instantly
       processNextSevenClubsTurn(room, null);
     }
   });
@@ -541,7 +604,15 @@ io.on('connection', (socket) => {
           if (room.hostId === socket.id) {
             room.hostId = room.players[0].id;
           }
-          io.to(roomCode).emit('roomUpdated', room);
+          // If we are playing Seven of Clubs and a player leaves, re-adjust the turn structure safely
+          if (room.phase === 'sevenClubsBoard' && room.sevenState) {
+            if (room.sevenState.activeIndex >= room.players.length) {
+              room.sevenState.activeIndex = 0;
+            }
+            processNextSevenClubsTurn(room, null);
+          } else {
+            io.to(roomCode).emit('roomUpdated', room);
+          }
         }
       }
     });
