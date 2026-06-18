@@ -136,9 +136,6 @@
   .mt-16 { margin-top: 16px; }
   .mt-20 { margin-top: 20px; }
   .mb-8 { margin-bottom: 8px; }
-  .player-answered { color: var(--crewmate); font-size: 0.75rem; }
-  .player-waiting { color: var(--warn); font-size: 0.75rem; }
-  .guess-reveal-badge { background: rgba(244,63,94,0.15); border: 1px dashed var(--imposter); padding: 10px; border-radius: 8px; color: var(--imposter); font-size: 0.85rem; margin-top: 14px; }
 
   /* SEVEN OF CLUBS STYLES */
   .seven-board { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 16px; }
@@ -167,28 +164,27 @@
     <div class="logo-sub">multiplayer gaming deck</div>
 
     <div class="card">
-      <div class="card-title"><span class="dot"></span> Create Game</div>
-      
-      <div class="mb-8" style="font-size: 0.8rem; color: var(--purple-glow);">Select Game Variant:</div>
+      <div class="card-title"><span class="dot"></span> 1. Set Your Player Profile Name</div>
+      <input type="text" id="global-player-name" placeholder="Enter username..." maxlength="18">
+    </div>
+
+    <div class="card">
+      <div class="card-title"><span class="dot"></span> Option A: Create New Room Workspace</div>
+      <div class="mb-8" style="font-size: 0.8rem; color: var(--purple-glow);">Select Game Mode:</div>
       <div class="mode-select-box">
         <div class="mode-option active" id="opt-mode-number" onclick="setCreationMode('number')">🔢 Number Imposter</div>
         <div class="mode-option" id="opt-mode-rj" onclick="setCreationMode('rj')">✨ RJImposter</div>
         <div class="mode-option" id="opt-mode-seven" onclick="setCreationMode('seven')">♣️ 7 of Clubs</div>
       </div>
-
-      <div class="mb-8">Your name</div>
-      <input type="text" id="host-name" placeholder="Enter your name..." maxlength="18">
-      <div class="mt-20">
-        <button class="btn btn-primary btn-full" onclick="createGame()">Create Lobby →</button>
-      </div>
+      <button class="btn btn-primary btn-full" onclick="createGame()">Launch New Server Lobby →</button>
     </div>
 
-    <div class="card text-center" style="padding:20px">
+    <div class="card">
+      <div class="card-title"><span class="dot"></span> Option B: Enter Existing Room Code</div>
       <div class="flex-row">
-        <input type="text" id="join-code" placeholder="ROOM CODE" maxlength="4" style="text-transform:uppercase;letter-spacing:3px">
-        <input type="text" id="join-name" placeholder="Your name" maxlength="18" style="width:130px;flex-shrink:0">
+        <input type="text" id="join-code" placeholder="4-LETTER CODE" maxlength="4" style="text-transform:uppercase; letter-spacing:3px; text-align:center;">
+        <button class="btn btn-secondary" onclick="joinGame()" style="min-width: 140px;">Join Lobby</button>
       </div>
-      <button class="btn btn-secondary btn-full mt-12" onclick="joinGame()">Join Game</button>
     </div>
   </div>
 
@@ -196,14 +192,14 @@
     <div class="card">
       <div class="card-title"><span class="dot"></span> Room Code</div>
       <div style="font-family:'Syne',sans-serif;font-size:2.8rem;font-weight:800;letter-spacing:8px;color:var(--purple-pale);text-align:center;" id="display-code">—</div>
-      <div id="variant-display-label" style="text-align:center; font-size:0.75rem; color:var(--accent); margin-top:8px; font-weight:700; letter-spacing:1px;"></div>
+      <div id="variant-display-label" style="text-align:center; font-size:0.75rem; color:var(--accent); margin-top:8px; font-weight:700; letter-spacing:1px; text-transform: uppercase;"></div>
     </div>
     <div class="card">
       <div class="card-title"><span class="dot"></span> Players <span style="color:var(--text-dim);font-size:0.8rem;margin-left:auto" id="player-count-label">0 joined</span></div>
       <div class="player-list" id="waiting-players"></div>
     </div>
     <div id="host-controls" style="display:none">
-      <button class="btn btn-primary btn-full" onclick="startGame()" id="start-btn">Start Game</button>
+      <button class="btn btn-primary btn-full" onclick="startGame()" id="start-btn">Start Game Session</button>
     </div>
   </div>
 
@@ -220,12 +216,12 @@
   <div class="screen" id="screen-turn-reveal">
     <div class="card text-center">
       <div class="card-title"><span class="dot"></span> Turn Order (Round <span class="reveal-round-title">1</span>)</div>
-      <p style="font-size:0.85rem;color:var(--text-dim);margin-bottom:20px;">Review the cycling matrix setup order.</p>
+      <p style="font-size:0.85rem;color:var(--text-dim);margin-bottom:20px;">Review the round cycle assignment order below.</p>
       <div class="player-list" id="reveal-order-list" style="gap:12px;margin-bottom:20px;text-align:left;"></div>
       <div id="host-reveal-controls" style="display:none">
         <button class="btn btn-primary btn-full" onclick="launchAnsweringPhase()">Begin Round →</button>
       </div>
-      <div id="player-reveal-notice" style="color:var(--text-dim);font-size:0.8rem;">Waiting for host action validation...</div>
+      <div id="player-reveal-notice" style="color:var(--text-dim);font-size:0.8rem;">Waiting for host validation...</div>
     </div>
   </div>
 
@@ -283,7 +279,7 @@
       <div class="card-title"><span class="dot"></span> Your Hand Deck</div>
       <div class="hand-container" id="my-hand-deck"></div>
       <div class="flex-row mt-12">
-        <button class="btn btn-secondary btn-full" id="pass-draw-btn" onclick="executeSevenPassAction()">Pass / Penalty Draw</button>
+        <button class="btn btn-secondary btn-full" id="pass-draw-btn" onclick="executeSevenPassAction()">Pass Turn</button>
       </div>
     </div>
 
@@ -357,16 +353,17 @@
   }
 
   function createGame() {
-    const nameInput = document.getElementById('host-name').value.trim();
-    if(!nameInput) return alert("Please specify a valid name configuration profile.");
+    const nameInput = document.getElementById('global-player-name').value.trim();
+    if(!nameInput) return alert("Please specify your name in the profile layout above first.");
     socket.emit('createRoom', { playerName: nameInput, gameMode: state.selectedVariant });
   }
 
   function joinGame() {
     const code = document.getElementById('join-code').value.trim().toUpperCase();
-    const name = document.getElementById('join-name').value.trim();
-    if(!code || !name) return alert("Please fill room matrix values.");
-    socket.emit('joinRoom', { roomCode: code, playerName: name });
+    const nameInput = document.getElementById('global-player-name').value.trim();
+    if(!nameInput) return alert("Please specify your name in the profile layout above first.");
+    if(!code) return alert("Please type a room code to join.");
+    socket.emit('joinRoom', { roomCode: code, playerName: nameInput });
   }
 
   function startGame() {
@@ -444,7 +441,7 @@
     if(room.phase === 'lobby') {
       document.getElementById('crewmate-persistent-hud').style.display = 'none';
       document.getElementById('imposter-trap-action-bar').style.display = 'none';
-      showScreen('lobby');
+      showScreen('waiting');
     }
   });
 
@@ -462,8 +459,8 @@
     if (room.gameMode === 'seven') {
       container.innerHTML = `
         <div class="role-card crewmate">
-          <div class="role-label crewmate">Deck Ready</div>
-          <p style="color:var(--text-dim); font-size:0.85rem;">The cards have been shunted out. Get ready to play your 7 of clubs chain.</p>
+          <div class="role-label crewmate">Deck Allocated</div>
+          <p style="color:var(--text-dim); font-size:0.85rem;">Your hand has been dealt. Prepare to construct the sequential suit grids.</p>
         </div>
       `;
     } else if (myRole === 'imposter') {
