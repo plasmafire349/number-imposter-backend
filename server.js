@@ -32,20 +32,38 @@ function generateRoomCode() {
   return code;
 }
 
+// Map ranks to numeric values for strict mathematical sequential validation
+const RANK_VALUES = { '7': 7, '8': 8, '9': 9, '10': 10, 'J': 11, 'Q': 12, 'K': 13, 'A': 14 };
+
+/**
+ * Initializes a structured 4x8 grid representing 4 dedicated suit rows.
+ * Columns represent chronologically ascending slots from 7 up to Ace.
+ */
 function initializeSevenClubsGrid() {
+  const suits = [
+    { name: 'Clubs', icon: '♣' },
+    { name: 'Spades', icon: '♠' },
+    { name: 'Hearts', icon: '♥' },
+    { name: 'Diamonds', icon: '♦' }
+  ];
+  const ranks = ['7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
   const grid = [];
   let index = 1;
-  for (let row = 1; row <= 4; row++) {
-    for (let col = 1; col <= 3; col++) {
+
+  suits.forEach((suit, rIdx) => {
+    ranks.forEach((rank, cIdx) => {
       grid.push({
         id: index++,
-        row: row,
-        col: col,
-        hasSuit: false,
+        row: rIdx + 1,
+        col: cIdx + 1,
+        suitName: suit.name,
+        suitIcon: suit.icon,
+        rank: rank,
+        hasCard: false,
         displayValue: '—'
       });
-    }
-  }
+    });
+  });
   return grid;
 }
 
@@ -340,7 +358,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  // CARD PLACEMENT VALIDATION RULE BLOCK
+  // STRICT ADJACENCY PLACEMENT ENGINE
   socket.on('sevenClubsPlayCard', ({ roomCode, suit, rank }) => {
     const room = rooms[roomCode];
     if (!room) return;
@@ -352,21 +370,36 @@ io.on('connection', (socket) => {
     if (cardIndex === -1) return;
     const cardPlayed = activePlayer.hand[cardIndex];
 
-    // Enforce Rule: Must play a 7 OR build on an existing opened suit icon matrix
-    const suitIsOnBoard = room.sevenClubsGrid.some(cell => cell.hasSuit && cell.displayValue.includes(cardPlayed.suitIcon));
-    const isValidPlay = (cardPlayed.rank === '7') || suitIsOnBoard;
+    let isValidPlay = false;
 
-    if (!isValidPlay) {
-      return socket.emit('errorMsg', `Validation Error: You can't drop the ${rank} of ${suit} yet. A '7' must open that suit layout first.`);
+    if (cardPlayed.rank === '7') {
+      // 7s are foundational and can always be placed to activate their row sequence
+      isValidPlay = true;
+    } else {
+      // Non-7 cards require the exact preceding mathematical neighbor to be present on the board
+      const targetValue = RANK_VALUES[cardPlayed.rank];
+      isValidPlay = room.sevenClubsGrid.some(cell => 
+        cell.suitName === cardPlayed.suit && 
+        cell.hasCard && 
+        RANK_VALUES[cell.rank] === (targetValue - 1)
+      );
     }
 
-    // Valid placement verified, remove card securely
+    if (!isValidPlay) {
+      return socket.emit('errorMsg', `Validation Error: You can't lay down the ${rank} of ${suit} yet. Adjacency sequences must build upwards consecutively from 7.`);
+    }
+
+    // Process valid card placement updates
     activePlayer.hand.splice(cardIndex, 1);
 
-    const emptyCell = room.sevenClubsGrid.find(cell => !cell.hasSuit);
-    if (emptyCell) {
-      emptyCell.hasSuit = true;
-      emptyCell.displayValue = `${cardPlayed.rank}${cardPlayed.suitIcon}`;
+    // Map card explicitly to its preallocated structural grid coordinates
+    const designatedCell = room.sevenClubsGrid.find(cell => 
+      cell.suitName === cardPlayed.suit && cell.rank === cardPlayed.rank
+    );
+    
+    if (designatedCell) {
+      designatedCell.hasCard = true;
+      designatedCell.displayValue = `${cardPlayed.rank}${cardPlayed.suitIcon}`;
     }
 
     io.to(roomCode).emit('clueActionLogged', {
@@ -499,9 +532,17 @@ function sendSevenClubsStateUpdate(room) {
 
   room.players.forEach(p => {
     const personalizedHand = p.hand.map(card => {
-      // Determine real-time visual playability flags directly
-      const suitIsOnBoard = room.sevenClubsGrid.some(cell => cell.hasSuit && cell.displayValue.includes(card.suitIcon));
-      const validRuleMatch = (card.rank === '7') || suitIsOnBoard;
+      let validRuleMatch = false;
+      
+      if (card.rank === '7') {
+        validRuleMatch = true;
+      } else {
+        const valueNum = RANK_VALUES[card.rank];
+        // Ensure the exact numerical sequence card under the identical suit string is present
+        validRuleMatch = room.sevenClubsGrid.some(cell => 
+          cell.suitName === card.suit && cell.hasCard && RANK_VALUES[cell.rank] === (valueNum - 1)
+        );
+      }
 
       return {
         ...card,
