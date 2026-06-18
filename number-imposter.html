@@ -29,16 +29,14 @@
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
 
-  body, html {
+  body {
     font-family: 'Space Mono', monospace;
     background: var(--bg);
     color: var(--text);
-    width: 100vw;
-    height: 100vh;
-    overflow: hidden;
+    min-height: 100vh;
+    overflow-x: hidden;
     position: relative;
-    margin: 0;
-    padding: 0;
+    padding-bottom: 60px;
   }
 
   body::before {
@@ -56,30 +54,19 @@
   .star { position: absolute; background: white; border-radius: 50%; animation: twinkle var(--d, 3s) infinite var(--delay, 0s) ease-in-out; opacity: 0; }
   @keyframes twinkle { 0%, 100% { opacity: 0; } 50% { opacity: var(--op, 0.6); } }
 
-  #app { 
-    position: relative; 
-    z-index: 1; 
-    width: 100%;
-    height: 100%; 
-    display: flex; 
-    flex-direction: column; 
-    align-items: center; 
-    justify-content: center;
-    padding: 20px; 
-  }
-  
-  .screen { display: none; width: 100%; height: 100%; animation: fadeIn 0.35s ease; }
-  .screen.active { display: flex; flex-direction: column; justify-content: center; align-items: center; }
+  #app { position: relative; z-index: 1; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; }
+  .screen { display: none; width: 100%; max-width: 720px; animation: fadeIn 0.35s ease; }
+  .screen.active { display: block; }
   @keyframes fadeIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
 
   .logo { font-family: 'Syne', sans-serif; font-weight: 800; font-size: clamp(2.2rem, 6vw, 3.4rem); text-align: center; letter-spacing: -1px; background: linear-gradient(135deg, var(--purple-pale), var(--accent), var(--purple-bright)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; margin-bottom: 6px; filter: drop-shadow(0 0 20px rgba(167,139,250,0.3)); }
   .logo-sub { text-align: center; color: var(--text-dim); font-size: 0.75rem; letter-spacing: 4px; text-transform: uppercase; margin-bottom: 30px; }
 
-  .card { background: var(--surface); border: 1px solid rgba(139,92,246,0.2); border-radius: var(--radius); padding: 24px; margin-bottom: 16px; box-shadow: var(--glow); width: 100%; max-width: 800px; }
+  .card { background: var(--surface); border: 1px solid rgba(139,92,246,0.2); border-radius: var(--radius); padding: 24px; margin-bottom: 16px; box-shadow: var(--glow); }
   .card-title { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 1.1rem; color: var(--purple-pale); margin-bottom: 16px; display: flex; align-items: center; gap: 10px; }
   .card-title .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--purple-bright); box-shadow: 0 0 8px var(--purple-bright); }
 
-  .hud-badge { display: none; background: rgba(16,185,129,0.15); border: 1px solid var(--crewmate); border-radius: 8px; padding: 10px; font-family: 'Syne', sans-serif; font-weight: 700; text-align: center; font-size: 1.1rem; color: var(--crewmate); margin-bottom: 16px; width: 100%; max-width: 800px; }
+  .hud-badge { display: none; background: rgba(16,185,129,0.15); border: 1px solid var(--crewmate); border-radius: 8px; padding: 10px; font-family: 'Syne', sans-serif; font-weight: 700; text-align: center; font-size: 1.1rem; color: var(--crewmate); margin-bottom: 16px; width: 100%; }
 
   input[type="text"], input[type="number"] { width: 100%; background: var(--surface2); border: 1px solid rgba(139,92,246,0.3); border-radius: 8px; padding: 14px 16px; color: var(--text); font-family: 'Space Mono', monospace; outline: none; transition: border-color 0.2s; }
   input[type="text"]:focus { border-color: var(--purple-bright); }
@@ -101,7 +88,7 @@
   .player-item { display: flex; align-items: center; justify-content: space-between; background: var(--surface2); border: 1px solid rgba(139,92,246,0.15); border-radius: 8px; padding: 10px 14px; }
   .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--crewmate); }
 
-  .turn-banner { background: rgba(139,92,246,0.15); border: 1px solid var(--purple-bright); border-radius: 8px; padding: 14px; font-family: 'Syne', sans-serif; font-weight: 700; text-align: center; color: var(--accent2); margin-bottom: 16px; width: 100%; max-width: 800px; }
+  .turn-banner { background: rgba(139,92,246,0.15); border: 1px solid var(--purple-bright); border-radius: 8px; padding: 14px; font-family: 'Syne', sans-serif; font-weight: 700; text-align: center; color: var(--accent2); margin-bottom: 16px; }
 
   /* ♣️ SEVEN OF CLUBS BOARD GRID */
   .seven-board-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 16px 0; }
@@ -122,7 +109,7 @@
   .player-hand-tray { display: flex; gap: 10px; overflow-x: auto; padding: 16px 8px; width: 100%; background: rgba(0,0,0,0.25); border-radius: 8px; min-height: 120px; }
   .card-back-asset { background: linear-gradient(135deg, var(--purple-deep), var(--purple-mid)) !important; border: 2px solid var(--purple-glow); color: var(--purple-pale) !important; justify-content: center !important; align-items: center !important; font-size: 1.5rem; }
 
-  .role-card { border-radius: var(--radius); padding: 30px; text-align: center; margin-bottom: 16px; border: 2px solid var(--crewmate); width: 100%; max-width: 800px; }
+  .role-card { border-radius: var(--radius); padding: 30px; text-align: center; margin-bottom: 16px; border: 2px solid var(--crewmate); }
   .role-card.crewmate { background: rgba(16,185,129,0.1); border-color: var(--crewmate); }
   .role-card.imposter { background: rgba(244,63,94,0.1); border-color: var(--imposter); }
   .role-label { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 2rem; margin-bottom: 6px; }
@@ -138,60 +125,10 @@
   .vote-btn.selected { border-color: var(--accent); background: rgba(232,121,249,0.1); }
   .vote-btn.disabled { opacity: 0.35; cursor: not-allowed; }
 
-  /* PODIUM DISPLAY DESIGN SYSTEM */
-  .podium-container {
-    display: flex;
-    justify-content: center;
-    align-items: flex-end;
-    gap: 16px;
-    width: 100%;
-    height: 240px;
-    margin: 24px 0;
-  }
-  .podium-box {
-    width: 110px;
-    background: linear-gradient(180deg, var(--surface2) 0%, var(--purple-deep) 100%);
-    border: 2px solid var(--purple-mid);
-    border-radius: 8px 8px 4px 4px;
-    padding: 12px 8px;
-    text-align: center;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-    align-items: center;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-    transition: all 0.3s ease;
-  }
-  .podium-box.rank-1 { border-color: var(--accent); box-shadow: 0 0 20px rgba(232,121,249,0.3); }
-  .podium-box.rank-2 { border-color: var(--purple-bright); }
-  .podium-box.rank-3 { border-color: var(--purple-mid); }
-  .podium-box.rank-4 { border-color: rgba(139,92,246,0.4); opacity: 0.8; }
-  
-  .podium-placement {
-    font-family: 'Syne', sans-serif;
-    font-weight: 800;
-    font-size: 1.4rem;
-    background: rgba(255,255,255,0.08);
-    border-radius: 6px;
-    width: 100%;
-    padding: 2px 0;
-    margin-bottom: 8px;
-  }
-  .podium-box.rank-1 .podium-placement { color: var(--accent); }
-  .podium-box.rank-2 .podium-placement { color: var(--purple-glow); }
-  .podium-box.rank-3 .podium-placement { color: var(--purple-pale); }
-  .podium-box.rank-4 .podium-placement { color: var(--text-dim); }
-  
-  .podium-name {
-    font-weight: 700;
-    font-size: 0.85rem;
-    word-break: break-all;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-  }
+  .vote-results { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+  .vote-bar { display: flex; align-items: center; gap: 12px; background: var(--surface2); border-radius: 8px; padding: 10px; }
+  .vote-bar-track { flex: 1; height: 6px; background: rgba(139,92,246,0.2); border-radius: 3px; overflow: hidden; }
+  .vote-bar-fill { height: 100%; background: linear-gradient(90deg, var(--purple-mid), var(--accent)); }
 
   .imposter-shortcut-bar { position: fixed; bottom: 0; left: 0; right: 0; background: #11050b; border-top: 2px solid var(--imposter); padding: 14px; z-index: 999; display: none; align-items: center; justify-content: center; gap: 12px; }
   .imposter-shortcut-bar input { width: 120px; text-align: center; font-weight: 700; background: var(--surface); border: 1px solid var(--imposter); color: var(--imposter); padding: 8px; border-radius: 6px; }
@@ -259,7 +196,7 @@
       <div class="player-list" id="waiting-players"></div>
     </div>
 
-    <div id="host-controls" style="display:none; width: 100%; max-width: 800px;">
+    <div id="host-controls" style="display:none">
       <button class="btn btn-primary btn-full" onclick="startGame()" id="start-btn">Start Game</button>
     </div>
   </div>
@@ -284,7 +221,7 @@
   </div>
 
   <div class="screen" id="screen-role">
-    <div id="role-card-container" style="width: 100%; display: flex; flex-direction: column; align-items: center;"></div>
+    <div id="role-card-container"></div>
     <div class="card text-center" id="ready-action-card">
       <button class="btn btn-primary btn-full" onclick="readyForRound()">I'm Ready →</button>
     </div>
@@ -359,10 +296,11 @@
       <div style="font-size:1.4rem; font-weight:800; color:var(--imposter); display:none;" id="result-imposter-box"></div>
       <div style="margin-top:6px; font-size:1rem; color:var(--text-dim); display:none;" id="result-number-reveal"></div>
       <div id="failed-guess-reveal-zone"></div>
-      
-      <div class="podium-container" id="game-podium-wrapper"></div>
     </div>
-    
+    <div class="card">
+      <div class="card-title"><span class="dot"></span> Vote Tracking Profile Matrix</div>
+      <div class="vote-results" id="final-vote-results"></div>
+    </div>
     <div class="card" id="host-result-controls" style="display:none">
       <div id="host-action-buttons-wrapper"></div>
     </div>
@@ -427,9 +365,7 @@ function triggerLobbyJoin() {
 
 function showScreen(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-  const target = document.getElementById('screen-' + id);
-  if(target) target.classList.add('active');
-  
+  document.getElementById('screen-' + id).classList.add('active');
   const hud = document.getElementById('crewmate-persistent-hud');
   if (state.gameMode !== 'card' && state.myRole === 'crewmate' && state.theNumber && ['turn-reveal', 'answer', 'continue-vote', 'vote'].includes(id)) {
     hud.style.display = 'block';
@@ -797,7 +733,7 @@ socket.on('goToResultScreen', (room) => {
   document.getElementById('imposter-trap-dock').style.display = 'none';
   document.getElementById('crewmate-persistent-hud').style.display = 'none';
   
-  const imposter = state.players.find(p => room.roles && room.roles[p.id] === 'imposter');
+  const imposter = state.players.find(p => room.roles[p.id] === 'imposter');
   document.getElementById('result-victory-declaration').textContent = room.gameOverReason || "Round Terminal Reached";
   
   const impBox = document.getElementById('result-imposter-box');
@@ -838,48 +774,17 @@ socket.on('goToResultScreen', (room) => {
     revealZone.innerHTML = '';
   }
   
-  // RENDER DYNAMIC 4TH, 3RD, 2ND, 1ST PLACE PODIUM IN LITTLE BOXES
-  const podiumWrapper = document.getElementById('game-podium-wrapper');
-  podiumWrapper.innerHTML = '';
+  const tally = room.voteTally || {};
+  const maxVotes = Math.max(...Object.values(tally), 1);
   
-  // Resolve placement ranking order
-  let standings = [];
-  if (state.gameMode === 'card' && room.sevenState && room.sevenState.winners) {
-    // For Seven of Clubs, use the explicit finish order array sent by the server
-    standings = room.sevenState.winners.map(name => ({ name }));
-  } else {
-    // For Imposter games, sort based on vote tallies or general metrics
-    const tally = room.voteTally || {};
-    standings = [...state.players]
-      .sort((a, b) => (tally[b.id] || 0) - (tally[a.id] || 0))
-      .map(p => ({ name: p.name }));
-  }
-  
-  // Fill array to guarantee up to 4 elements for rendering rows beautifully
-  while(standings.length < 4) {
-    standings.push({ name: '—' });
-  }
-  
-  // Map index positioning to visual podium look: 4th [idx 3], 2nd [idx 1], 1st [idx 0], 3rd [idx 2]
-  const renderLayoutIndices = [3, 1, 0, 2];
-  const relativeHeights = { 0: '180px', 1: '140px', 2: '110px', 3: '80px' };
-  
-  renderLayoutIndices.forEach(idx => {
-    const item = standings[idx];
-    const placementNumber = idx + 1;
-    let suffix = 'th';
-    if(placementNumber === 1) suffix = 'st';
-    if(placementNumber === 2) suffix = 'nd';
-    if(placementNumber === 3) suffix = 'rd';
-    
-    podiumWrapper.innerHTML += `
-      <div class="podium-box rank-${placementNumber}" style="height: ${relativeHeights[idx]};">
-        <div class="podium-placement">${placementNumber}${suffix}</div>
-        <div class="podium-name">${item ? item.name : '—'}</div>
-      </div>
-    `;
-  });
-
+  const finalVoteEl = document.getElementById('final-vote-results');
+  finalVoteEl.innerHTML = state.players.sort((a,b) => (tally[b.id]||0) - (tally[a.id]||0)).map(p => `
+    <div class="vote-bar">
+      <div style="min-width:110px; font-size:0.85rem;">${p.name} ${(room.roles && room.roles[p.id]==='imposter' && !room.tieBreakerActive)?'🕵️':''}</div>
+      <div class="vote-bar-track"><div class="vote-bar-fill" style="width:${((tally[p.id]||0)/maxVotes)*100}%"></div></div>
+      <div style="font-size:0.85rem; font-weight:700;">${tally[p.id]||0}</div>
+    </div>
+  `).join('');
   document.getElementById('host-result-controls').style.display = state.isHost ? 'block' : 'none';
   showScreen('result');
 });
@@ -888,9 +793,13 @@ socket.on('errorMsg', (msg) => {
   alert(msg);
 });
 
+// --- TURN NOTICE POPUP ALERT FOR KING OR ACE ---
+socket.on('sevenClubsCardAlertPopup', (data) => {
+  alert(`📢 CRITICAL PLAY!\n\n${data.player} has locked in a ${data.card}!`);
+});
+
 function makeStars() {
   const container = document.getElementById('stars');
-  if(!container) return;
   for (let i = 0; i < 35; i++) {
     const star = document.createElement('div');
     star.className = 'star';
