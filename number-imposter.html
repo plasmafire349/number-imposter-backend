@@ -90,11 +90,12 @@
 
   .turn-banner { background: rgba(139,92,246,0.15); border: 1px solid var(--purple-bright); border-radius: 8px; padding: 14px; font-family: 'Syne', sans-serif; font-weight: 700; text-align: center; color: var(--accent2); margin-bottom: 16px; }
 
-  .seven-board-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 16px 0; }
-  .board-cell { background: var(--surface2); border: 1px dashed rgba(139,92,246,0.25); border-radius: 8px; padding: 14px; min-height: 105px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+  /* FIX: Refactored matrix from 3 columns to an 8-column layout with responsive handling */
+  .seven-board-grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 6px; margin: 16px 0; overflow-x: auto; width: 100%; padding-bottom: 4px; }
+  .board-cell { background: var(--surface2); border: 1px dashed rgba(139,92,246,0.25); border-radius: 6px; padding: 8px 4px; min-height: 85px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; min-width: 65px; }
   .board-cell.active-suit { border-style: solid; border-color: var(--purple-bright); background: rgba(45,31,110,0.25); }
-  .board-cell-label { font-size: 0.65rem; color: var(--text-dim); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
-  .board-cell-value { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 1rem; }
+  .board-cell-label { font-size: 0.55rem; color: var(--text-dim); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.3px; }
+  .board-cell-value { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 0.95rem; }
   
   .game-card-element { display: inline-flex; flex-direction: column; align-items: center; justify-content: space-between; width: 64px; height: 88px; border-radius: 8px; font-weight: 700; background: #ffffff; color: #000000; padding: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.4); cursor: pointer; user-select: none; transition: transform 0.15s, outline 0.15s, opacity 0.15s; position: relative; flex-shrink: 0; }
   .game-card-element.suit-hearts, .game-card-element.suit-diamonds { color: #e11d48; }
@@ -211,7 +212,7 @@
     </div>
 
     <div class="card">
-      <div class="card-title"><span class="dot"></span> Layout Matrix Table (3 Columns x 4 Rows)</div>
+      <div class="card-title"><span class="dot"></span> Layout Matrix Table (8 Columns x 4 Rows)</div>
       <div class="seven-board-grid" id="seven-board-grid-slots"></div>
     </div>
 
@@ -356,7 +357,6 @@ window.addEventListener('DOMContentLoaded', () => {
 function copyInviteLink() {
   if (!state.roomCode) return;
   const inviteLink = `${window.location.origin}/?room=${state.roomCode}`;
-  
   navigator.clipboard.writeText(inviteLink).then(() => {
     const btn = document.getElementById('copy-link-btn');
     btn.textContent = "✓ Link Copied!";
@@ -535,8 +535,8 @@ socket.on('sevenClubsUpdateBoard', (gameData) => {
   if (gameData.gridCells) {
     gameData.gridCells.forEach(cell => {
       matrixContainer.innerHTML += `
-        <div class="board-cell ${cell.hasSuit ? 'active-suit' : ''}">
-          <div class="board-cell-label">Row ${cell.row} · Col ${cell.col}</div>
+        <div class="board-cell ${cell.hasCard ? 'active-suit' : ''}">
+          <div class="board-cell-label">${cell.suitIcon} R${cell.row}·C${cell.col}</div>
           <div class="board-cell-value">${cell.displayValue}</div>
         </div>
       `;
@@ -578,7 +578,6 @@ socket.on('sevenClubsUpdateBoard', (gameData) => {
   }
 });
 
-// SILENT LOG NOTIFIER (Replaces disruptive alert modal popups)
 socket.on('clueActionLogged', (data) => {
   const logFeed = document.getElementById('card-action-feed-banner');
   if (logFeed) {
@@ -653,7 +652,6 @@ socket.on('goToTurnRevealScreen', (room) => {
       <div style="font-weight:700;">${index + 1}. ${p.name} ${p.id === state.playerId ? '<span style="color:var(--accent)">(You)</span>' : ''}</div>
     </div>
   `).join('');
-
   document.getElementById('host-reveal-controls').style.display = state.isHost ? 'block' : 'none';
   document.getElementById('player-reveal-notice').style.display = state.isHost ? 'none' : 'block';
 
