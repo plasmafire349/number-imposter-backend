@@ -138,6 +138,7 @@
   .mb-8 { margin-bottom: 8px; }
   .player-answered { color: var(--crewmate); font-size: 0.8rem; }
   .player-waiting { color: var(--warn); font-size: 0.8rem; }
+  .hand-counter-badge { background: rgba(139,92,246,0.2); border: 1px solid var(--purple-glow); padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 700; color: var(--purple-pale); }
 </style>
 </head>
 <body>
@@ -208,6 +209,11 @@
     
     <div class="card" id="card-action-feed-banner" style="display:none; background: rgba(16,185,129,0.1); border: 1px solid var(--crewmate); border-radius: 8px; padding: 10px; margin-bottom: 16px; font-size: 0.85rem; text-align: center; color: var(--crewmate);">
       No recent moves logged.
+    </div>
+
+    <div class="card">
+      <div class="card-title"><span class="dot" style="background:var(--accent)"></span> Live Matrix Radar (Hand Counts)</div>
+      <div class="player-list" id="seven-mode-radar-list"></div>
     </div>
 
     <div class="card">
@@ -529,16 +535,30 @@ socket.on('sevenClubsUpdateBoard', (gameData) => {
     banner.textContent = `Turn cycle: Active match execution moves to ${gameData.activePlayerName}`;
   }
 
-  // FIXED MAPPING VALUES FOR THE BOARD MATRIX GRID
+  // UPDATED RADAR CONTAINER TO DISPLAY LIVE PLAYER CARD COUNTERS
+  const radarContainer = document.getElementById('seven-mode-radar-list');
+  radarContainer.innerHTML = '';
+  if (state.players && gameData.allHandCounts) {
+    state.players.forEach(p => {
+      const cardCount = gameData.allHandCounts[p.id] !== undefined ? gameData.allHandCounts[p.id] : 0;
+      const isCurrentActive = p.id === gameData.activePlayerId ? 'border-color: var(--accent); background: rgba(232,121,249,0.05);' : '';
+      radarContainer.innerHTML += `
+        <div class="player-item" style="${isCurrentActive}">
+          <div>${p.name} ${p.id === state.playerId ? '<span style="color:var(--purple-glow)">(You)</span>' : ''} ${p.id === gameData.activePlayerId ? '⚡️' : ''}</div>
+          <span class="hand-counter-badge">${cardCount} Cards Left</span>
+        </div>
+      `;
+    });
+  }
+
   const matrixContainer = document.getElementById('seven-board-grid-slots');
   matrixContainer.innerHTML = '';
   if (gameData.gridCells) {
     gameData.gridCells.forEach(cell => {
-      // Highlights the entire row cell line if cards have been played onto it
       const hasCards = cell.cardsPlayed && cell.cardsPlayed.length > 0;
       matrixContainer.innerHTML += `
         <div class="board-cell ${hasCards ? 'active-suit' : ''}">
-          <div class="board-cell-label">${cell.suitName} (${cell.display})</div>
+          <div class="board-cell-label">${cell.suitName}</div>
           <div class="board-cell-value">${cell.display}</div>
         </div>
       `;
@@ -733,7 +753,7 @@ socket.on('promptContinueVote', () => {
   document.getElementById('continue-choice-buttons').style.display = 'flex';
   const cv = document.getElementById('continue-status-list');
   cv.innerHTML = state.players.map(p => 
-    `<div class="player-item"><div>${p.name}</div><span class="player-waiting" id="continue-status-${p.id}">⏳ Voting...</span></div>`
+    <div class="player-item"><div>${p.name}</div><span class="player-waiting" id="continue-status-${p.id}">⏳ Voting...</span></div>
   ).join('');
   showScreen('continue-vote');
 });
