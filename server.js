@@ -9,14 +9,17 @@ const io = new Server(server, {
   cors: { origin: "*", methods: ["GET", "POST"] }
 });
 
+// Serve static assets from current directory
 app.use(express.static(path.join(__dirname)));
 
+// Express fallback route to serve your main front-end workspace
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'number-imposter.html'));
 });
 
 const rooms = {};
 
+// Generates an unrepeated unique 4-character token alphanumeric room matrix coordinate
 function generateRoomCode() {
   const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let code = '';
@@ -37,32 +40,50 @@ const SUITS = [
   { name: 'Diamonds', icon: '♦', row: 4 }
 ];
 
-// Initialize the 4 rows x 3 columns layout structure
+// Initialize the 4 rows x 3 columns matrix layout array expected by the frontend grid view
 function initializeSevensGrid() {
   const grid = [];
   SUITS.forEach(suit => {
-    // Column 1: Left side (6 down to A)
+    // Column 1: Left sequence layout bucket tracking cards streaming from 6 down to Ace
     grid.push({ row: suit.row, col: 1, suitName: suit.name, suitIcon: suit.icon, cardsPlayed: [], type: 'left', display: '6-A' });
-    // Column 2: Center (The Anchor 7)
+    // Column 2: Core anchor card cell layout bucket (Holds the 7)
     grid.push({ row: suit.row, col: 2, suitName: suit.name, suitIcon: suit.icon, cardsPlayed: [], type: 'center', display: '—' });
-    // Column 3: Right side (8 up to K)
+    // Column 3: Right sequence layout bucket tracking cards streaming from 8 up to King
     grid.push({ row: suit.row, col: 3, suitName: suit.name, suitIcon: suit.icon, cardsPlayed: [], type: 'right', display: '8-K' });
   });
   return grid;
 }
 
 io.on('connection', (socket) => {
+  console.log(`📡 New infrastructure socket attached: ${socket.id}`);
 
+  // ── LOBBY MANAGMENT PIPELINES ──────────────────────────────────────────────
   socket.on('createRoom', ({ playerName, gameMode }) => {
-    if (!playerName) return socket.emit('errorMsg', 'Identity parameters are mandatory.');
+    if (!playerName || !playerName.trim()) return socket.emit('errorMsg', 'Identity parameters are mandatory.');
+    
     const roomCode = generateRoomCode();
     rooms[roomCode] = {
-      code: roomCode, hostId: socket.id, gameMode: gameMode || 'number', phase: 'lobby',
-      players: [{ id: socket.id, name: playerName.trim() }], roles: {}, theNumber: null,
-      round: 1, turnOrder: [], currentTurnIndex: 0, readyPlayers: {}, answers: {},
-      continueVotes: {}, votes: {}, voteTally: {}, failedImposterGuess: null, tieBreakerActive: false,
-      sevensGrid: [], sevensActivePlayerIdx: 0
+      code: roomCode,
+      hostId: socket.id,
+      gameMode: gameMode || 'number',
+      phase: 'lobby',
+      players: [{ id: socket.id, name: playerName.trim() }],
+      roles: {},
+      theNumber: null,
+      round: 1,
+      turnOrder: [],
+      currentTurnIndex: 0,
+      readyPlayers: {},
+      answers: {},
+      continueVotes: {},
+      votes: {},
+      voteTally: {},
+      failedImposterGuess: null,
+      tieBreakerActive: false,
+      sevensGrid: [],
+      sevensActivePlayerIdx: 0
     };
+
     socket.join(roomCode);
     io.to(roomCode).emit('roomUpdated', rooms[roomCode]);
   });
@@ -70,9 +91,10 @@ io.on('connection', (socket) => {
   socket.on('joinRoom', ({ roomCode, playerName }) => {
     const cleanedCode = roomCode ? roomCode.trim().toUpperCase() : '';
     const room = rooms[cleanedCode];
-    if (!room) return socket.emit('errorMsg', 'Room not found.');
-    if (room.phase !== 'lobby') return socket.emit('errorMsg', 'Match already in progress.');
-    if (!playerName || !playerName.trim()) return socket.emit('errorMsg', 'Invalid name.');
+    
+    if (!room) return socket.emit('errorMsg', 'Core target room code not located.');
+    if (room.phase !== 'lobby') return socket.emit('errorMsg', 'Simulation matrix already initialization-locked.');
+    if (!playerName || !playerName.trim()) return socket.emit('errorMsg', 'Invalid system identity parameter.');
 
     room.players.push({ id: socket.id, name: playerName.trim() });
     socket.join(cleanedCode);
@@ -82,19 +104,21 @@ io.on('connection', (socket) => {
   socket.on('startGame', ({ roomCode }) => {
     const room = rooms[roomCode];
     if (!room || room.hostId !== socket.id) return;
-    if (room.players.length < 3) return socket.emit('errorMsg', 'Requires a minimum of 3 players.');
+    if (room.players.length < 3) return socket.emit('errorMsg', 'Requires a minimum of 3 network client connections.');
 
     room.failedImposterGuess = null;
     room.tieBreakerActive = false;
     room.round = 1;
     room.answers = {};
     room.votes = {};
+    room.continueVotes = {};
+    room.readyPlayers = {};
 
     if (room.gameMode === 'card') {
       room.phase = 'sevenClubsBoard';
       room.sevensGrid = initializeSevensGrid();
       
-      // Build standard 52-card deck
+      // Build standard 52-card core deck array
       let fullDeck = [];
       SUITS.forEach(s => {
         Object.keys(RANK_VALUES).forEach(r => {
@@ -102,13 +126,13 @@ io.on('connection', (socket) => {
         });
       });
 
-      // Shuffle
+      // Fisher-Yates shuffle engine execution
       for (let i = fullDeck.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
         [fullDeck[i], fullDeck[j]] = [fullDeck[j], fullDeck[i]];
       }
 
-      // Deal all cards completely
+      // Distribute entire card deck array elements cleanly among all player arrays
       room.players.forEach(p => p.hand = []);
       let playerIdx = 0;
       while(fullDeck.length > 0) {
@@ -116,7 +140,7 @@ io.on('connection', (socket) => {
         playerIdx++;
       }
 
-      // Find who has the 7 of Clubs to start the game traditionally
+      // Find the traditional match starter element carrying the 7 of Clubs anchor card
       let startingPlayerIdx = 0;
       room.players.forEach((p, idx) => {
         if (p.hand.some(c => c.suit === 'Clubs' && c.rank === '7')) {
@@ -127,9 +151,8 @@ io.on('connection', (socket) => {
       room.sevensActivePlayerIdx = startingPlayerIdx;
       sendSevensStateUpdate(room);
     } else {
-      // (Default Imposter Setup Modes Remain Intact)
+      // Initialize Default Imposter Setup Configurations
       room.phase = 'role';
-      room.readyPlayers = {};
       room.theNumber = room.gameMode === 'rj' ? 
         ["SYNAPSE", "QUANTUM", "COMPILER", "MAINFRAME"][Math.floor(Math.random() * 4)] : 
         Math.floor(Math.random() * 10) + 1;
@@ -143,22 +166,23 @@ io.on('connection', (socket) => {
     }
   });
 
-  // GAME LOOP HANDLERS FOR CARD MODE
+  // ── SEVENS RULES CARD MATRIX ENGINE PIPELINES ──────────────────────────────
   socket.on('sevenClubsPlayCard', ({ roomCode, suit, rank }) => {
     const room = rooms[roomCode];
-    if (!room) return;
+    if (!room || room.phase !== 'sevenClubsBoard') return;
 
     const activePlayer = room.players[room.sevensActivePlayerIdx];
     if (socket.id !== activePlayer.id) return;
 
     const cardIndex = activePlayer.hand.findIndex(c => c.suit === suit && c.rank === rank);
     if (cardIndex === -1) return;
+
     const cardPlayed = activePlayer.hand[cardIndex];
     const cardVal = RANK_VALUES[rank];
-
     let targetCell = null;
     let isValid = false;
 
+    // Validate play positioning boundaries against column definitions
     if (cardVal === 7) {
       targetCell = room.sevensGrid.find(cell => cell.suitName === suit && cell.type === 'center');
       if (targetCell && targetCell.cardsPlayed.length === 0) isValid = true;
@@ -166,11 +190,11 @@ io.on('connection', (socket) => {
       targetCell = room.sevensGrid.find(cell => cell.suitName === suit && cell.type === 'left');
       const centerCell = room.sevensGrid.find(cell => cell.suitName === suit && cell.type === 'center');
       
-      if (centerCell.cardsPlayed.length > 0) {
+      if (centerCell && centerCell.cardsPlayed.length > 0) {
         if (targetCell.cardsPlayed.length === 0 && cardVal === 6) {
           isValid = true;
         } else if (targetCell.cardsPlayed.length > 0) {
-          const highestValueOnLeft = RANK_VALUES[targetCell.cardsPlayed[0]]; // items are unshifted
+          const highestValueOnLeft = RANK_VALUES[targetCell.cardsPlayed[0]]; // prepended
           if (cardVal === highestValueOnLeft - 1) isValid = true;
         }
       }
@@ -178,7 +202,7 @@ io.on('connection', (socket) => {
       targetCell = room.sevensGrid.find(cell => cell.suitName === suit && cell.type === 'right');
       const centerCell = room.sevensGrid.find(cell => cell.suitName === suit && cell.type === 'center');
 
-      if (centerCell.cardsPlayed.length > 0) {
+      if (centerCell && centerCell.cardsPlayed.length > 0) {
         if (targetCell.cardsPlayed.length === 0 && cardVal === 8) {
           isValid = true;
         } else if (targetCell.cardsPlayed.length > 0) {
@@ -188,41 +212,47 @@ io.on('connection', (socket) => {
       }
     }
 
-    if (!isValid) return socket.emit('errorMsg', "Sequence Error: You can't skip numbers!");
+    if (!isValid) return socket.emit('errorMsg', "Sequence Error: You can't skip numerical card values!");
 
+    // Remove the card from the player's deck array bounds
     activePlayer.hand.splice(cardIndex, 1);
 
+    // Append value and adjust frontend grid labels dynamically
     if (cardVal === 7) {
       targetCell.cardsPlayed.push(rank);
       targetCell.display = `7${cardPlayed.suitIcon}`;
     } else if (cardVal < 7) {
-      targetCell.cardsPlayed.unshift(rank); // Prepends so the lowest card values display out front
+      targetCell.cardsPlayed.unshift(rank); // Prepends to keep the order intuitive (e.g., "5 6 ♣")
       targetCell.display = `${targetCell.cardsPlayed.join(' ')}${cardPlayed.suitIcon}`;
     } else {
       targetCell.cardsPlayed.push(rank);
       targetCell.display = `${targetCell.cardsPlayed.join(' ')}${cardPlayed.suitIcon}`;
     }
 
-    io.to(roomCode).emit('clueActionLogged', { text: `${activePlayer.name} placed ${rank}${cardPlayed.suitIcon}` });
+    io.to(roomCode).emit('clueActionLogged', { text: `${activePlayer.name} placed down card: [${rank}${cardPlayed.suitIcon}]` });
 
+    // Evaluate hand depletion win state parameters
     if (activePlayer.hand.length === 0) {
-      room.gameOverReason = `Victory! "${activePlayer.name}" cleared their deck and won Sevens!`;
+      room.gameOverReason = `Victory declared! "${activePlayer.name}" completely cleared their hand deck configuration array and won Sevens!`;
       room.phase = 'result';
+      room.voteTally = {};
       io.to(roomCode).emit('goToResultScreen', room);
       return;
     }
 
+    // Advance turn sequence pointer index
     room.sevensActivePlayerIdx = (room.sevensActivePlayerIdx + 1) % room.players.length;
     sendSevensStateUpdate(room);
   });
 
   socket.on('sevenClubsPickFromNeighbor', ({ roomCode }) => {
     const room = rooms[roomCode];
-    if (!room) return;
+    if (!room || room.phase !== 'sevenClubsBoard') return;
 
     const activePlayer = room.players[room.sevensActivePlayerIdx];
     if (socket.id !== activePlayer.id) return;
 
+    // Grab card index parameter from the next adjacent seating matrix node
     const nextSeatIdx = (room.sevensActivePlayerIdx + 1) % room.players.length;
     const neighborPlayer = room.players[nextSeatIdx];
 
@@ -231,18 +261,28 @@ io.on('connection', (socket) => {
       const drawnCard = neighborPlayer.hand.splice(randIdx, 1)[0];
       activePlayer.hand.push(drawnCard);
 
-      io.to(roomCode).emit('clueActionLogged', { text: `${activePlayer.name} passed turn and took a random card from ${neighborPlayer.name}.` });
+      io.to(roomCode).emit('clueActionLogged', { text: `${activePlayer.name} passed their turn and extracted a random layout asset from ${neighborPlayer.name}.` });
+      
+      // Secondary validation check if drawing empty-handed a neighbor triggered their victory state
+      if (neighborPlayer.hand.length === 0) {
+        room.gameOverReason = `Hand depletion milestone met! "${neighborPlayer.name}" cleared their configuration hand and won!`;
+        room.phase = 'result';
+        room.voteTally = {};
+        io.to(roomCode).emit('goToResultScreen', room);
+        return;
+      }
     }
 
     room.sevensActivePlayerIdx = (room.sevensActivePlayerIdx + 1) % room.players.length;
     sendSevensStateUpdate(room);
   });
 
-  // (All traditional logic methods for fallback modes remain the same below...)
+  // ── IMPOSTER SEQUENCE LOOP HOOK ACTIONS ──────────────────────────────────
   socket.on('playerReady', ({ roomCode }) => {
     const room = rooms[roomCode]; if (!room) return;
     room.readyPlayers[socket.id] = true;
     io.to(roomCode).emit('readyListUpdated', room.readyPlayers);
+
     if (Object.keys(room.readyPlayers).length === room.players.length) {
       room.phase = 'turnReveal';
       room.turnOrder = [...room.players].sort(() => Math.random() - 0.5);
@@ -253,8 +293,10 @@ io.on('connection', (socket) => {
 
   socket.on('startAnswering', ({ roomCode }) => {
     const room = rooms[roomCode]; if (!room) return;
-    room.phase = 'answer'; room.answers[room.round] = {};
+    room.phase = 'answer';
+    room.answers[room.round] = {};
     io.to(roomCode).emit('goToAnswerScreen', room);
+
     const activeUser = room.turnOrder[room.currentTurnIndex];
     io.to(roomCode).emit('nextTurnIndex', { activePlayerId: activeUser.id, activePlayerName: activeUser.name });
   });
@@ -268,7 +310,10 @@ io.on('connection', (socket) => {
     room.answers[room.round][socket.id] = sanitizedClue;
 
     io.to(roomCode).emit('clueRevealedLive', {
-      playerId: socket.id, playerName: currentActiveExpectedPlayer.name, clueWord: sanitizedClue, roundAnswers: room.answers[room.round]
+      playerId: socket.id,
+      playerName: currentActiveExpectedPlayer.name,
+      clueWord: sanitizedClue,
+      roundAnswers: room.answers[room.round]
     });
 
     room.currentTurnIndex++;
@@ -282,15 +327,24 @@ io.on('connection', (socket) => {
 
   socket.on('nextPhase', ({ roomCode, targetPhase }) => {
     const room = rooms[roomCode]; if (!room) return;
-    if (targetPhase === 'round2') {
-      room.round = 2; room.currentTurnIndex = 0; room.phase = 'answer'; room.answers[room.round] = {};
+    
+    if (targetPhase === 'round2' || targetPhase === 'tiebreakerRound') {
+      room.round = targetPhase === 'tiebreakerRound' ? room.round + 1 : 2;
+      room.currentTurnIndex = 0;
+      room.phase = 'answer';
+      room.answers[room.round] = {};
       io.to(roomCode).emit('goToAnswerScreen', room);
+      
       const activeUser = room.turnOrder[room.currentTurnIndex];
       io.to(roomCode).emit('nextTurnIndex', { activePlayerId: activeUser.id, activePlayerName: activeUser.name });
     } else if (targetPhase === 'askContinue') {
-      room.phase = 'continueVote'; room.continueVotes = {}; io.to(roomCode).emit('promptContinueVote');
+      room.phase = 'continueVote';
+      room.continueVotes = {};
+      io.to(roomCode).emit('promptContinueVote');
     } else if (targetPhase === 'vote') {
-      room.phase = 'vote'; room.votes = {}; io.to(roomCode).emit('goToVoteScreen', room);
+      room.phase = 'vote';
+      room.votes = {};
+      io.to(roomCode).emit('goToVoteScreen', room);
     }
   });
 
@@ -298,16 +352,23 @@ io.on('connection', (socket) => {
     const room = rooms[roomCode]; if (!room) return;
     room.continueVotes[socket.id] = choice;
     io.to(roomCode).emit('continueStatusUpdated', room.continueVotes);
+
     if (Object.keys(room.continueVotes).length === room.players.length) {
       let tallyMore = 0, tallyVote = 0;
       Object.values(room.continueVotes).forEach(v => v === 'more' ? tallyMore++ : tallyVote++);
+      
       if (tallyMore > tallyVote) {
-        room.round++; room.currentTurnIndex = 0; room.phase = 'answer'; room.answers[room.round] = {};
+        room.round++;
+        room.currentTurnIndex = 0;
+        room.phase = 'answer';
+        room.answers[room.round] = {};
         io.to(roomCode).emit('goToAnswerScreen', room);
         const activeUser = room.turnOrder[room.currentTurnIndex];
         io.to(roomCode).emit('nextTurnIndex', { activePlayerId: activeUser.id, activePlayerName: activeUser.name });
       } else {
-        room.phase = 'vote'; room.votes = {}; io.to(roomCode).emit('goToVoteScreen', room);
+        room.phase = 'vote';
+        room.votes = {};
+        io.to(roomCode).emit('goToVoteScreen', room);
       }
     }
   });
@@ -316,6 +377,7 @@ io.on('connection', (socket) => {
     const room = rooms[roomCode]; if (!room) return;
     room.votes[socket.id] = targetPlayerId;
     io.to(roomCode).emit('voteStatusUpdated', room.votes);
+
     if (Object.keys(room.votes).length === room.players.length) {
       evaluateBallotResolutions(roomCode);
     }
@@ -323,22 +385,32 @@ io.on('connection', (socket) => {
 
   socket.on('imposterGuessNumber', ({ roomCode, guessedNumber }) => {
     const room = rooms[roomCode]; if (!room) return;
+    
     const targetGuessNormalized = guessedNumber ? guessedNumber.toString().trim().toUpperCase() : '';
     const actualSolutionNormalized = room.theNumber ? room.theNumber.toString().trim().toUpperCase() : '';
 
     room.phase = 'result';
+    room.voteTally = {};
     if (targetGuessNormalized === actualSolutionNormalized) {
-      room.gameOverReason = `Victory! The Imposter cracked the hidden value code: [${room.theNumber}].`;
+      room.gameOverReason = `Victory declared! The Imposter successfully cracked the hidden target parameter code: [${room.theNumber}].`;
     } else {
       room.failedImposterGuess = guessedNumber;
-      room.gameOverReason = "Defeat! The Imposter entered an incorrect guess parameter break action.";
+      room.gameOverReason = "Defeat! The Imposter broke cover with an incorrect guess configuration parameter match error.";
     }
     io.to(roomCode).emit('goToResultScreen', room);
   });
 
   socket.on('resetGame', ({ roomCode }) => {
     const room = rooms[roomCode]; if (!room) return;
-    room.phase = 'lobby'; room.roles = {}; room.theNumber = null; room.answers = {}; room.votes = {};
+    room.phase = 'lobby';
+    room.roles = {};
+    room.theNumber = null;
+    room.answers = {};
+    room.votes = {};
+    room.continueVotes = {};
+    room.readyPlayers = {};
+    room.failedImposterGuess = null;
+    room.tieBreakerActive = false;
     io.to(roomCode).emit('roomUpdated', room);
   });
 
@@ -348,44 +420,60 @@ io.on('connection', (socket) => {
       const pIdx = room.players.findIndex(p => p.id === socket.id);
       if (pIdx !== -1) {
         room.players.splice(pIdx, 1);
-        if (room.players.length === 0) delete rooms[code];
-        else { if (room.hostId === socket.id) room.hostId = room.players[0].id; io.to(code).emit('roomUpdated', room); }
+        if (room.players.length === 0) {
+          delete rooms[code];
+        } else {
+          if (room.hostId === socket.id) room.hostId = room.players[0].id;
+          io.to(code).emit('roomUpdated', room);
+        }
       }
     });
   });
 });
 
+// ── AUXILIARY CONTEXT PROCESSING UTILITIES ───────────────────────────────────
+
 function evaluateBallotResolutions(roomCode) {
   const room = rooms[roomCode];
-  const tally = {}; room.players.forEach(p => tally[p.id] = 0);
+  const tally = {};
+  room.players.forEach(p => tally[p.id] = 0);
   Object.values(room.votes).forEach(tId => { if (tally[tId] !== undefined) tally[tId]++; });
   room.voteTally = tally;
 
   let maxVotes = -1, highestVotedPlayers = [];
   Object.keys(tally).forEach(pId => {
-    if (tally[pId] > maxVotes) { maxVotes = tally[pId]; highestVotedPlayers = [pId]; }
-    else if (tally[pId] === maxVotes) { highestVotedPlayers.push(pId); }
+    if (tally[pId] > maxVotes) {
+      maxVotes = tally[pId];
+      highestVotedPlayers = [pId];
+    } else if (tally[pId] === maxVotes) {
+      highestVotedPlayers.push(pId);
+    }
   });
 
-  room.phase = 'result';
-  if (highestVotedPlayers.length > 1) {
-    room.tieBreakerActive = true; room.gameOverReason = "Tied Ballot config matched! Consensus split.";
+  if (highestVotedPlayers.length > 1 && !room.tieBreakerActive) {
+    room.tieBreakerActive = true;
+    room.phase = 'result';
+    room.gameOverReason = "Tied Ballot configurations matched! Consensus split into structural deadlock.";
   } else {
+    room.phase = 'result';
+    room.tieBreakerActive = false;
     const target = highestVotedPlayers[0];
     room.gameOverReason = room.roles[target] === 'imposter' ? 
-      `Victory! The Crewmates successfully tracked down the Imposter.` : 
-      "Defeat! An innocent crewmate asset was exiled, leaving the Imposter to win.";
+      `Victory! The Crewmates successfully identified and isolated the Imposter [${room.players.find(p=>p.id===target).name}].` : 
+      `Defeat! An innocent Crewmate [${room.players.find(p=>p.id===target).name}] was exiled into deep space, allowing the Imposter to win!`;
   }
   io.to(roomCode).emit('goToResultScreen', room);
 }
 
 function sendSevensStateUpdate(room) {
   const activePlayer = room.players[room.sevensActivePlayerIdx];
+  
+  // Calculate index position of target adjacent player on left seat axis
   const nextSeatIdx = (room.sevensActivePlayerIdx + 1) % room.players.length;
   const leftNeighbor = room.players[nextSeatIdx];
 
   room.players.forEach(p => {
-    // Determine card playability dynamically
+    // Inject custom client constraints to label available options
     const dynamicHand = p.hand.map(card => {
       let isPlayable = false;
       if (p.id === activePlayer.id) {
@@ -395,14 +483,14 @@ function sendSevensStateUpdate(room) {
         } else if (val < 7) {
           const targetCell = room.sevensGrid.find(c => c.suitName === card.suit && c.type === 'left');
           const centerCell = room.sevensGrid.find(c => c.suitName === card.suit && c.type === 'center');
-          if (centerCell.cardsPlayed.length > 0) {
+          if (centerCell && centerCell.cardsPlayed.length > 0) {
             if (targetCell.cardsPlayed.length === 0 && val === 6) isPlayable = true;
             else if (targetCell.cardsPlayed.length > 0 && val === RANK_VALUES[targetCell.cardsPlayed[0]] - 1) isPlayable = true;
           }
         } else if (val > 7) {
           const targetCell = room.sevensGrid.find(c => c.suitName === card.suit && c.type === 'right');
           const centerCell = room.sevensGrid.find(c => c.suitName === card.suit && c.type === 'center');
-          if (centerCell.cardsPlayed.length > 0) {
+          if (centerCell && centerCell.cardsPlayed.length > 0) {
             if (targetCell.cardsPlayed.length === 0 && val === 8) isPlayable = true;
             else if (targetCell.cardsPlayed.length > 0 && val === RANK_VALUES[targetCell.cardsPlayed[targetCell.cardsPlayed.length - 1]] + 1) isPlayable = true;
           }
@@ -411,7 +499,7 @@ function sendSevensStateUpdate(room) {
       return { ...card, isPlayable };
     });
 
-    // Sort hand by Suit and then Rank Value to stay incredibly clean for the user
+    // Sort your private card display layout array for readability
     dynamicHand.sort((a,b) => a.row !== b.row ? a.row - b.row : RANK_VALUES[a.rank] - RANK_VALUES[b.rank]);
 
     io.to(p.id).emit('sevenClubsUpdateBoard', {
@@ -425,4 +513,4 @@ function sendSevensStateUpdate(room) {
 }
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log(`🚀 Running layout architecture on: http://localhost:${PORT}`));
+server.listen(PORT, () => console.log(`🚀 Dedicated server layer initialized: http://localhost:${PORT}`));
