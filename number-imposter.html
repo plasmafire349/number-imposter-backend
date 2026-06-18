@@ -96,16 +96,16 @@
   .board-cell-label { font-size: 0.65rem; color: var(--text-dim); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
   .board-cell-value { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 1rem; }
   
-  .game-card-element { display: inline-flex; flex-direction: column; align-items: center; justify-content: space-between; width: 64px; height: 88px; border-radius: 8px; font-weight: 700; background: #ffffff; color: #000000; padding: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.4); cursor: pointer; user-select: none; transition: transform 0.15s, outline 0.15s; position: relative; flex-shrink: 0; }
+  .game-card-element { display: inline-flex; flex-direction: column; align-items: center; justify-content: space-between; width: 64px; height: 88px; border-radius: 8px; font-weight: 700; background: #ffffff; color: #000000; padding: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.4); cursor: pointer; user-select: none; transition: transform 0.15s, outline 0.15s, opacity 0.15s; position: relative; flex-shrink: 0; }
   .game-card-element.suit-hearts, .game-card-element.suit-diamonds { color: #e11d48; }
   .game-card-element.suit-clubs, .game-card-element.suit-spades { color: #0f172a; }
-  .game-card-element.playable { outline: 3px solid var(--crewmate); box-shadow: 0 0 14px var(--crewmate); transform: translateY(-4px); }
-  .game-card-element.dimmed { opacity: 0.4; cursor: not-allowed; }
+  .game-card-element.playable { outline: 3px solid var(--crewmate); box-shadow: 0 0 14px var(--crewmate); transform: translateY(-4px); opacity: 1; }
+  .game-card-element.dimmed { opacity: 0.3; cursor: not-allowed; pointer-events: none; transform: none; box-shadow: none; outline: none; }
   .game-card-rank { font-size: 1.1rem; font-family: 'Syne', sans-serif; align-self: flex-start; }
   .game-card-icon { font-size: 1.1rem; align-self: flex-end; }
   
   .player-hand-tray { display: flex; gap: 10px; overflow-x: auto; padding: 16px 8px; width: 100%; background: rgba(0,0,0,0.25); border-radius: 8px; min-height: 120px; }
-  .card-back-asset { background: linear-gradient(135deg, var(--purple-deep), var(--purple-mid)) !important; border: 2px solid var(--purple-glow); color: var(--purple-pale) !important; justify-content: center !important; align-items: center !important; font-size: 1.5rem; }
+  .card-back-asset { background: linear-gradient(135deg, var(--purple-deep), var(--purple-mid)) !important; border: 2px solid var(--purple-glow); color: var(--purple-pale) !important; justify-content: center !important; align-items: center !important; font-size: 1.5rem; opacity: 1 !important; pointer-events: auto !important; }
 
   .role-card { border-radius: var(--radius); padding: 30px; text-align: center; margin-bottom: 16px; border: 2px solid var(--crewmate); }
   .role-card.crewmate { background: rgba(16,185,129,0.1); border-color: var(--crewmate); }
@@ -206,6 +206,10 @@
   <div class="screen" id="screen-seven-clubs-board">
     <div class="turn-banner" id="seven-turn-status-banner">Loading table parameters...</div>
     
+    <div class="card" id="card-action-feed-banner" style="display:none; background: rgba(16,185,129,0.1); border: 1px solid var(--crewmate); border-radius: 8px; padding: 10px; margin-bottom: 16px; font-size: 0.85rem; text-align: center; color: var(--crewmate);">
+      No recent moves logged.
+    </div>
+
     <div class="card">
       <div class="card-title"><span class="dot"></span> Layout Matrix Table (3 Columns x 4 Rows)</div>
       <div class="seven-board-grid" id="seven-board-grid-slots"></div>
@@ -339,22 +343,18 @@ let state = {
   tieBreakerActive: false
 };
 
-// NEW: Read incoming invite parameters immediately on page load
 window.addEventListener('DOMContentLoaded', () => {
   const urlParams = new URLSearchParams(window.location.search);
   const roomParam = urlParams.get('room');
   if (roomParam) {
     const cleanedCode = roomParam.trim().toUpperCase();
     document.getElementById('join-code').value = cleanedCode;
-    // Hide variant selection to keep the joining screen clean for guests
     document.getElementById('lobby-create-card').style.display = 'none';
   }
 });
 
-// NEW: Function to generate and copy the link
 function copyInviteLink() {
   if (!state.roomCode) return;
-  // Creates a link like http://localhost:3000/?room=ABCD
   const inviteLink = `${window.location.origin}/?room=${state.roomCode}`;
   
   navigator.clipboard.writeText(inviteLink).then(() => {
@@ -366,7 +366,7 @@ function copyInviteLink() {
       btn.style.borderColor = "rgba(139,92,246,0.3)";
     }, 2000);
   }).catch(err => {
-    alert("Could not automatically copy. Share this link: " + inviteLink);
+    alert("Share this link: " + inviteLink);
   });
 }
 
@@ -388,7 +388,6 @@ function triggerLobbyCreation() {
 }
 
 function triggerLobbyJoin() {
-  // Pull from whichever name input is available or use a prompt if it was hidden
   let nameInput = document.getElementById('shared-identity-name').value.trim();
   if (!nameInput) {
     nameInput = prompt("Enter your name to join the workspace:");
@@ -526,7 +525,7 @@ socket.on('sevenClubsUpdateBoard', (gameData) => {
 
   const banner = document.getElementById('seven-turn-status-banner');
   if(gameData.activePlayerId === state.playerId) {
-    banner.textContent = "⭐️ IT'S YOUR TURN! PLAY A GLOWING CARD OR DRAW FROM YOUR OPPONENT ⭐️";
+    banner.textContent = "⭐️ IT'S YOUR TURN! LAY DOWN A HIGHLIGHTED CARD OR DRAW FROM YOUR NEIGHBOR ⭐️";
   } else {
     banner.textContent = `Turn cycle: Active match execution moves to ${gameData.activePlayerName}`;
   }
@@ -579,8 +578,13 @@ socket.on('sevenClubsUpdateBoard', (gameData) => {
   }
 });
 
-socket.on('sevenClubsCardAlertPopup', (data) => {
-  alert(`🚨 CRITICAL HIGHER PROFILE ACTION!\n\nPlayer "${data.player}" successfully placed the ${data.card} on the workspace board grid matrix!`);
+// SILENT LOG NOTIFIER (Replaces disruptive alert modal popups)
+socket.on('clueActionLogged', (data) => {
+  const logFeed = document.getElementById('card-action-feed-banner');
+  if (logFeed) {
+    logFeed.style.display = 'block';
+    logFeed.textContent = `📡 ${data.text}`;
+  }
 });
 
 socket.on('goToRoleScreen', (room) => {
