@@ -1,6 +1,7 @@
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
+const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
@@ -8,15 +9,19 @@ const io = new Server(server);
 
 const PORT = process.env.PORT || 3000;
 
-// Memory storage for live game state rooms
+// Explicitly route to home page serving 4.txt
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, '4.txt'));
+});
+
+// Master state tracking object for active rooms
 const rooms = {};
 
-// --- DECK UTILITIES FOR SEVEN OF CLUBS ---
 const SUITS = [
-  { name: 'Clubs', icon: '♣', color: 'black' },
-  { name: 'Spades', icon: '♠', color: 'black' },
-  { name: 'Hearts', icon: '♥', color: 'red' },
-  { name: 'Diamonds', icon: '♦', color: 'red' }
+  { name: 'Clubs', icon: '♣' },
+  { name: 'Spades', icon: '♠' },
+  { name: 'Hearts', icon: '♥' },
+  { name: 'Diamonds', icon: '♦' }
 ];
 const RANKS = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
 
@@ -35,33 +40,28 @@ function createShuffledDeck() {
   return deck;
 }
 
-// Check matrix placement rules for Seven of Clubs
+// FIXED: Corrected matrix path arithmetic for Seven of Clubs
 function isCardPlayable(card, boardState) {
   const suitState = boardState[card.suit];
   
-  // A 7 can always be played to open up its suit row
   if (card.rank === '7') return true;
-  
-  // If the 7 of this suit hasn't been placed yet, no other rank can be played
   if (!suitState.hasSeven) return false;
   
   const rankIdx = RANKS.indexOf(card.rank);
   
-  // Check downward path to build towards Ace
+  // Downward path towards Ace (Index 6 is rank '7')
   if (rankIdx < 6) {
-    return suitState.lowestPlaced === rankIdx + 1;
+    return rankIdx === suitState.lowestPlaced - 1;
   }
-  // Check upward path to build towards King
+  // Upward path towards King
   if (rankIdx > 6) {
-    return suitState.highestPlaced === rankIdx - 1;
+    return rankIdx === suitState.highestPlaced + 1;
   }
   return false;
 }
 
-// --- CORE SOCKET CONTROLLER ENGINE ---
 io.on('connection', (socket) => {
 
-  // Create customized room instance
   socket.on('createRoom', ({ playerName, gameMode }) => {
     const roomCode = Math.random().toString(36).substring(2, 6).toUpperCase();
     
@@ -89,7 +89,6 @@ io.on('connection', (socket) => {
     socket.emit('roomUpdated', rooms[roomCode]);
   });
 
-  // Join existing active instance
   socket.on('joinRoom', ({ roomCode, playerName }) => {
     const room = rooms[roomCode];
     if (!room) {
@@ -97,7 +96,7 @@ io.on('connection', (socket) => {
       return;
     }
     if (room.phase !== 'lobby') {
-      socket.emit('errorMsg', 'Game session already executed structural components.');
+      socket.emit('errorMsg', 'Game session already in progress.');
       return;
     }
 
@@ -106,13 +105,11 @@ io.on('connection', (socket) => {
     io.to(roomCode).emit('roomUpdated', room);
   });
 
-  // Start Phase Router
   socket.on('startGame', ({ roomCode }) => {
     const room = rooms[roomCode];
     if (!room || room.hostId !== socket.id) return;
 
     if (room.gameMode === 'card') {
-      // Initialize Seven of Clubs State Framework
       const deck = createShuffledDeck();
       const playerCount = room.players.length;
       const hands = {};
@@ -123,10 +120,9 @@ io.on('connection', (socket) => {
         hands[playerObj.id].push(card);
       });
 
-      // Track card positions matrix matching the screen rendering loops
       room.sevenState = {
         hands: hands,
-        winners: [], // Chronological placement log array for podium parsing
+        winners: [], 
         activeIndex: 0,
         board: {
           Clubs: { hasSeven: false, lowestPlaced: 6, highestPlaced: 6 },
@@ -136,7 +132,6 @@ io.on('connection', (socket) => {
         }
       };
 
-      // Set index to player holding 7 of Clubs to kickstart round rules
       let starterFoundIdx = 0;
       room.players.forEach((p, pIdx) => {
         const hasSevenClubs = hands[p.id].some(c => c.suit === 'Clubs' && c.rank === '7');
@@ -147,7 +142,6 @@ io.on('connection', (socket) => {
       
       syncSevenClubsState(room);
     } else {
-      // Setup logic for standard Imposter matches
       room.round = 1;
       room.answers = {};
       room.continueVotes = {};
@@ -156,10 +150,13 @@ io.on('connection', (socket) => {
       room.failedImposterGuess = null;
       room.gameOverReason = '';
 
-      // Define standard numeric goals
-      room.theNumber = room.gameMode === 'rj' ? 'Secret Word' : Math.floor(Math.random() * 10) + 1;
+      // FIXED: Handled specific setup configuration for RJ Variant vs Number mode
+      if (room.gameMode === 'rj') {
+        room.theNumber = "SPECTRUM"; // Custom target objective string placeholder
+      } else {
+        room.theNumber = Math.floor(Math.random() * 10) + 1;
+      }
       
-      // Select random imposter position
       const imposterIdx = Math.floor(Math.random() * room.players.length);
       room.roles = {};
       room.players.forEach((p, idx) => {
@@ -171,7 +168,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Player synchronization ready checkpoints
   socket.on('playerReady', ({ roomCode }) => {
     const room = rooms[roomCode];
     if (!room) return;
@@ -223,7 +219,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Cycle phase engine logic for Imposter loops
   socket.on('nextPhase', ({ roomCode, targetPhase }) => {
     const room = rooms[roomCode];
     if (!room || room.hostId !== socket.id) return;
@@ -293,7 +288,8 @@ io.on('connection', (socket) => {
     const room = rooms[roomCode];
     if (!room || room.roles[socket.id] !== 'imposter') return;
 
-    if (parseInt(guessedNumber) === parseInt(room.theNumber)) {
+    // Direct configuration match checking regardless of string/numeric data inputs
+    if (String(guessedNumber).toUpperCase() === String(room.theNumber).toUpperCase()) {
       room.gameOverReason = "💥 Imposter guessed the Target Code accurately! Imposter Victory! 💥";
     } else {
       room.failedImposterGuess = guessedNumber;
@@ -303,7 +299,6 @@ io.on('connection', (socket) => {
     io.to(roomCode).emit('goToResultScreen', room);
   });
 
-  // ─── SEVEN OF CLUBS TRANSACTION LOGIC ───────────────────
   socket.on('sevenClubsPlayCard', ({ roomCode, suit, rank }) => {
     const room = rooms[roomCode];
     if (!room || !room.sevenState) return;
@@ -312,7 +307,6 @@ io.on('connection', (socket) => {
     const activePlayer = room.players[stateObj.activeIndex];
     if (!activePlayer || activePlayer.id !== socket.id) return;
 
-    // Check hand contains target element array tracking
     const hand = stateObj.hands[socket.id] || [];
     const cardIdx = hand.findIndex(c => c.suit === suit && c.rank === rank);
     if (cardIdx === -1) return;
@@ -320,10 +314,8 @@ io.on('connection', (socket) => {
     const targetCard = hand[cardIdx];
     if (!isCardPlayable(targetCard, stateObj.board)) return;
 
-    // Remove from player hand deck tray
     hand.splice(cardIdx, 1);
 
-    // Apply mutation structural flags to target board dimensions
     const rankIdx = RANKS.indexOf(rank);
     if (rank === '7') {
       stateObj.board[suit].hasSeven = true;
@@ -333,7 +325,7 @@ io.on('connection', (socket) => {
       stateObj.board[suit].highestPlaced = rankIdx;
     }
 
-    // --- POPUP ANNOUNCEMENT HOOK FOR K / A ---
+    // --- POPUP ANNOUNCEMENT TRIGGER FOR KING OR ACE ---
     if (rank === 'K' || rank === 'A') {
       io.to(roomCode).emit('sevenClubsCardAlertPopup', {
         player: activePlayer.name,
@@ -351,18 +343,16 @@ io.on('connection', (socket) => {
     const stateObj = room.sevenState;
     if (room.players[stateObj.activeIndex].id !== socket.id) return;
 
-    // Establish cyclical boundary constraints for index targeting
     let leftNeighborIdx = (stateObj.activeIndex - 1 + room.players.length) % room.players.length;
     while (leftNeighborIdx !== stateObj.activeIndex && (stateObj.hands[room.players[leftNeighborIdx].id] || []).length === 0) {
       leftNeighborIdx = (leftNeighborIdx - 1 + room.players.length) % room.players.length;
     }
 
-    if (leftNeighborIdx === stateObj.activeIndex) return; // Self mismatch boundary flag
+    if (leftNeighborIdx === stateObj.activeIndex) return; 
 
     const sourceHand = stateObj.hands[room.players[leftNeighborIdx].id] || [];
     if (sourceHand.length === 0) return;
 
-    // Pluck random element from targeting array
     const randomIdx = Math.floor(Math.random() * sourceHand.length);
     const stolenCard = sourceHand.splice(randomIdx, 1)[0];
 
@@ -397,8 +387,6 @@ io.on('connection', (socket) => {
   });
 });
 
-// ─── PROCEDURAL CONTROLLER HELPER METRICS ───────────────
-
 function sendNextActiveClueTurn(room) {
   const activePlayer = room.turnOrder[room.activeIndex];
   io.to(room.code).emit('nextTurnIndex', {
@@ -416,7 +404,6 @@ function processImposterVoteResolution(room) {
 
   room.voteTally = tally;
 
-  // Track max elements inside current array maps
   const maxVotes = Math.max(...Object.values(tally));
   const tiedPlayers = Object.keys(tally).filter(pId => tally[pId] === maxVotes);
 
@@ -428,7 +415,6 @@ function processImposterVoteResolution(room) {
     return;
   }
 
-  // Absolute single target identified
   const votedOutId = tiedPlayers[0];
   const isImposter = room.roles[votedOutId] === 'imposter';
   room.tieBreakerActive = false;
@@ -446,7 +432,6 @@ function processImposterVoteResolution(room) {
 function proceedNextSevenClubsTurn(room) {
   const stateObj = room.sevenState;
 
-  // Log active player completions dynamically into standings profile for final podium extraction
   room.players.forEach(p => {
     if ((stateObj.hands[p.id] || []).length === 0 && !stateObj.winners.includes(p.name)) {
       stateObj.winners.push(p.name);
@@ -455,7 +440,6 @@ function proceedNextSevenClubsTurn(room) {
 
   const remainingPlayers = room.players.filter(p => (stateObj.hands[p.id] || []).length > 0);
 
-  // If 1 or 0 players remain active, the simulation terminates safely
   if (remainingPlayers.length <= 1) {
     if (remainingPlayers.length === 1) {
       stateObj.winners.push(remainingPlayers[0].name);
@@ -465,7 +449,6 @@ function proceedNextSevenClubsTurn(room) {
     return;
   }
 
-  // Iterate to next adjacent array player with cards remaining
   let index = stateObj.activeIndex;
   do {
     index = (index + 1) % room.players.length;
@@ -479,7 +462,6 @@ function syncSevenClubsState(room) {
   const stateObj = room.sevenState;
   const currentActivePlayer = room.players[stateObj.activeIndex];
 
-  // Resolve left neighbor balance bounds to determine target count properties
   let leftNeighborIdx = (stateObj.activeIndex - 1 + room.players.length) % room.players.length;
   while (leftNeighborIdx !== stateObj.activeIndex && (stateObj.hands[room.players[leftNeighborIdx].id] || []).length === 0) {
     leftNeighborIdx = (leftNeighborIdx - 1 + room.players.length) % room.players.length;
@@ -487,13 +469,11 @@ function syncSevenClubsState(room) {
   const neighborId = room.players[leftNeighborIdx].id;
   const count = (stateObj.hands[neighborId] || []).length;
 
-  // Build the 4x3 matrix layout view matching standard rows for all grid layouts
   const suitsOrder = ['Clubs', 'Spades', 'Hearts', 'Diamonds'];
   const gridCells = [];
 
   suitsOrder.forEach((suitName, rowIdx) => {
     const sState = stateObj.board[suitName];
-    // Fill the 3 horizontal card tracking column slots (Lowest, 7, Highest)
     gridCells.push({
       row: rowIdx + 1,
       col: 1,
@@ -514,7 +494,6 @@ function syncSevenClubsState(room) {
     });
   });
 
-  // Unique emission for each user to preserve private hand tracking configurations
   room.players.forEach(p => {
     const pHand = stateObj.hands[p.id] || [];
     const optimizedHand = pHand.map(card => ({
@@ -532,7 +511,6 @@ function syncSevenClubsState(room) {
   });
 }
 
-// Start HTTP Workspace Application Listener
 server.listen(PORT, () => {
   console.log(`Server executing live parameters on port: ${PORT}`);
 });
