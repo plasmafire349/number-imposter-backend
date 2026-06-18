@@ -86,7 +86,6 @@ io.on('connection', (socket) => {
       continueVotes: {},
       failedImposterGuess: null,
       gameOverReason: "",
-      // Seven of Clubs State Properties
       playerHands: {},
       boardLayout: {
         Clubs: { min: null, max: null },
@@ -115,7 +114,8 @@ io.on('connection', (socket) => {
   });
 
   socket.on('startGame', ({ roomCode }) => {
-    const room = rooms[roomCode];
+    const cleanedCode = roomCode.trim().toUpperCase();
+    const room = rooms[cleanedCode];
     if (!room || room.hostId !== socket.id) return;
 
     if (room.players.length < 2) {
@@ -123,7 +123,6 @@ io.on('connection', (socket) => {
     }
 
     if (room.gameMode === 'seven') {
-      // Build and shuffle deck
       const suits = ['Clubs', 'Diamonds', 'Hearts', 'Spades'];
       const ranks = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
       let deck = [];
@@ -134,7 +133,6 @@ io.on('connection', (socket) => {
       });
       deck.sort(() => Math.random() - 0.5);
 
-      // Distribute cards evenly
       room.players.forEach(p => room.playerHands[p.id] = []);
       let playerIdx = 0;
       while (deck.length > 0) {
@@ -144,7 +142,6 @@ io.on('connection', (socket) => {
         playerIdx = (playerIdx + 1) % room.players.length;
       }
 
-      // Find initial turn holder holding 7 of Clubs
       let startingTurn = 0;
       room.players.forEach((p, idx) => {
         const hand = room.playerHands[p.id];
@@ -162,7 +159,7 @@ io.on('connection', (socket) => {
       };
       room.standingsList = [];
 
-      io.to(roomCode).emit('sevenClubsUpdateBoard', room);
+      io.to(cleanedCode).emit('sevenClubsUpdateBoard', room);
     } else {
       room.phase = 'role';
       if (room.gameMode === 'rj') {
@@ -178,64 +175,69 @@ io.on('connection', (socket) => {
         room.roles[p.id] = (idx === imposterIndex) ? 'imposter' : 'crewmate';
       });
 
-      io.to(roomCode).emit('goToRoleScreen', room);
+      io.to(cleanedCode).emit('goToRoleScreen', room);
     }
   });
 
   socket.on('playerReady', ({ roomCode }) => {
-    const room = rooms[roomCode];
+    const cleanedCode = roomCode.trim().toUpperCase();
+    const room = rooms[cleanedCode];
     if (!room) return;
 
     room.readyPlayers[socket.id] = true;
-    io.to(roomCode).emit('readyListUpdated', room.readyPlayers);
+    io.to(cleanedCode).emit('readyListUpdated', room.readyPlayers);
 
     if (Object.keys(room.readyPlayers).length === room.players.length) {
       room.phase = 'turnReveal';
       room.turnOrder = [...room.players].sort(() => Math.random() - 0.5);
-      io.to(roomCode).emit('goToTurnRevealScreen', room);
+      io.to(cleanedCode).emit('goToTurnRevealScreen', room);
     }
   });
 
   socket.on('startAnswering', ({ roomCode }) => {
-    const room = rooms[roomCode];
+    const cleanedCode = roomCode.trim().toUpperCase();
+    const room = rooms[cleanedCode];
     if (!room || room.hostId !== socket.id) return;
 
     room.phase = 'answer';
     if (!room.answers[room.round]) room.answers[room.round] = {};
 
-    io.to(roomCode).emit('goToAnswerScreen', room);
-    handleNextTurnIndex(roomCode);
+    io.to(cleanedCode).emit('goToAnswerScreen', room);
+    handleNextTurnIndex(cleanedCode);
   });
 
   socket.on('submitClue', ({ roomCode, clueWord }) => {
-    const room = rooms[roomCode];
+    const cleanedCode = roomCode.trim().toUpperCase();
+    const room = rooms[cleanedCode];
     if (!room) return;
 
     const roundAnswers = room.answers[room.round];
     roundAnswers[socket.id] = clueWord;
 
-    io.to(roomCode).emit('clueRevealedLive', {
+    io.to(cleanedCode).emit('clueRevealedLive', {
       playerId: socket.id,
       playerName: room.players.find(p => p.id === socket.id)?.name || "Unknown",
       clueWord: clueWord,
       roundAnswers: roundAnswers
     });
 
-    handleNextTurnIndex(roomCode);
+    handleNextTurnIndex(cleanedCode);
   });
 
   socket.on('nextPhase', ({ roomCode, targetPhase }) => {
-    const room = rooms[roomCode];
+    const cleanedCode = roomCode.trim().toUpperCase();
+    const room = rooms[cleanedCode];
     if (!room || room.hostId !== socket.id) return;
 
     if (targetPhase === 'askContinue') {
       room.continueVotes = {};
-      io.to(roomCode).emit('promptContinueVote');
+      io.to(cleanedCode).emit('promptContinueVote');
     }
   });
 
   socket.on('submitContinueChoice', ({ roomCode, choice }) => {
-    const room = rooms[roomCode];
+    const cleanedCode = roomCode.trim().toUpperCase();
+    const room = rooms[cleanedCode];
     if (!room) return;
 
     room.continueVotes[socket.id] = choice;
@@ -244,21 +246,22 @@ io.on('connection', (socket) => {
       if (moreVotes > room.players.length / 2) {
         room.round += 1;
         room.answers[room.round] = {};
-        io.to(roomCode).emit('goToAnswerScreen', room);
-        handleNextTurnIndex(roomCode);
+        io.to(cleanedCode).emit('goToAnswerScreen', room);
+        handleNextTurnIndex(cleanedCode);
       } else {
         room.phase = 'vote';
-        io.to(roomCode).emit('goToVoteScreen', room);
+        io.to(cleanedCode).emit('goToVoteScreen', room);
       }
     }
   });
 
   socket.on('castVote', ({ roomCode, targetPlayerId }) => {
-    const room = rooms[roomCode];
+    const cleanedCode = roomCode.trim().toUpperCase();
+    const room = rooms[cleanedCode];
     if (!room) return;
 
     room.voteTally[targetPlayerId] = (room.voteTally[targetPlayerId] || 0) + 1;
-    io.to(roomCode).emit('voteStatusUpdated', { [socket.id]: true });
+    io.to(cleanedCode).emit('voteStatusUpdated', { [socket.id]: true });
 
     const totalVotes = Object.values(room.voteTally).reduce((a, b) => a + b, 0);
     if (totalVotes === room.players.length) {
@@ -282,12 +285,13 @@ io.on('connection', (socket) => {
           room.gameOverReason = `💥 IMPOSTER VICTORY! Innocent Crewmate (${targetName}) was exiled. The secret target value was "${room.theNumber}".`;
         }
       }
-      io.to(roomCode).emit('goToResultScreen', room);
+      io.to(cleanedCode).emit('goToResultScreen', room);
     }
   });
 
   socket.on('imposterGuessNumber', ({ roomCode, guessedNumber }) => {
-    const room = rooms[roomCode];
+    const cleanedCode = roomCode.trim().toUpperCase();
+    const room = rooms[cleanedCode];
     if (!room) return;
 
     room.phase = 'result';
@@ -298,12 +302,13 @@ io.on('connection', (socket) => {
       room.failedImposterGuess = guessedNumber;
       room.gameOverReason = `🎉 CREWMATE VICTORY! The Imposter guessed incorrectly ("${guessedNumber}"). The real element value was "${room.theNumber}".`;
     }
-    io.to(roomCode).emit('goToResultScreen', room);
+    io.to(cleanedCode).emit('goToResultScreen', room);
   });
 
-  /* SEVEN OF CLUBS ENGINE IMPLEMENTATION ROUTINES */
+  /* SEVEN OF CLUBS ENGINE ROUTINES */
   socket.on('sevenClubsPlayCard', ({ roomCode, rank, suit }) => {
-    const room = rooms[roomCode];
+    const cleanedCode = roomCode.trim().toUpperCase();
+    const room = rooms[cleanedCode];
     if (!room || room.phase !== 'sevenClubsBoard') return;
 
     const activePlayer = room.players[room.currentTurnIndex];
@@ -335,17 +340,14 @@ io.on('connection', (socket) => {
       }
     }
 
-    if (!moveValid) return socket.emit('errorMsg', "Illegal move logic profile under current layout boundaries!");
+    if (!moveValid) return socket.emit('errorMsg', "Illegal move layout boundaries!");
 
-    // Execute move modifications safely
     hand.splice(cardIdx, 1);
 
-    // Track finish conditions
     if (hand.length === 0 && !room.standingsList.includes(activePlayer.name)) {
       room.standingsList.push(activePlayer.name);
     }
 
-    // Evaluate global game end
     const dynamicPlayersWithCards = room.players.filter(p => room.playerHands[p.id].length > 0);
     if (dynamicPlayersWithCards.length <= 1) {
       dynamicPlayersWithCards.forEach(p => {
@@ -353,34 +355,34 @@ io.on('connection', (socket) => {
       });
       room.phase = 'result';
       room.gameOverReason = `🎉 Seven of Clubs completed! Winner: ${room.standingsList[0] || 'Unknown'}`;
-      io.to(roomCode).emit('goToResultScreen', room);
+      io.to(cleanedCode).emit('goToResultScreen', room);
     } else {
-      // Find next player index loop
       do {
         room.currentTurnIndex = (room.currentTurnIndex + 1) % room.players.length;
       } while (room.playerHands[room.players[room.currentTurnIndex].id].length === 0);
 
-      io.to(roomCode).emit('sevenClubsUpdateBoard', room);
+      io.to(cleanedCode).emit('sevenClubsUpdateBoard', room);
     }
   });
 
   socket.on('sevenClubsPassAction', ({ roomCode }) => {
-    const room = rooms[roomCode];
+    const cleanedCode = roomCode.trim().toUpperCase();
+    const room = rooms[cleanedCode];
     if (!room || room.phase !== 'sevenClubsBoard') return;
 
     const activePlayer = room.players[room.currentTurnIndex];
     if (activePlayer.id !== socket.id) return socket.emit('errorMsg', "It is not your turn!");
 
-    // Advance turn index natively if no valid moves are available
     do {
       room.currentTurnIndex = (room.currentTurnIndex + 1) % room.players.length;
     } while (room.playerHands[room.players[room.currentTurnIndex].id].length === 0);
 
-    io.to(roomCode).emit('sevenClubsUpdateBoard', room);
+    io.to(cleanedCode).emit('sevenClubsUpdateBoard', room);
   });
 
   socket.on('resetGame', ({ roomCode }) => {
-    const room = rooms[roomCode];
+    const cleanedCode = roomCode.trim().toUpperCase();
+    const room = rooms[cleanedCode];
     if (!room || room.hostId !== socket.id) return;
 
     room.phase = 'lobby';
@@ -405,7 +407,7 @@ io.on('connection', (socket) => {
     room.currentTurnIndex = 0;
     room.standingsList = [];
 
-    io.to(roomCode).emit('roomUpdated', room);
+    io.to(cleanedCode).emit('roomUpdated', room);
   });
 
   socket.on('disconnect', () => {
@@ -423,5 +425,5 @@ io.on('connection', (socket) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`Multi-mode network server running cleanly on port: ${PORT}`);
+  console.log(`Server executing cleanly on port: ${PORT}`);
 });
