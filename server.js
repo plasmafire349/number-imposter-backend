@@ -1,7 +1,7 @@
-const express = require('express');
-const http = require('http');
-const { Server } = require('socket.io');
-const path = require('path');
+const express = require("express");
+const http = require("http");
+const { Server } = require("socket.io");
+const path = require("path");
 
 const app = express();
 const server = http.createServer(app);
@@ -9,438 +9,930 @@ const io = new Server(server);
 
 const PORT = process.env.PORT || 3000;
 
-// Serve public static client assets
-app.use(express.static(path.join(__dirname, '../public')));
-// If your html file is right next to server.js instead, use: app.use(express.static(__dirname));
+app.use(express.static(path.join(__dirname, "../public")));
 
-// Game State Database (In-Memory Map structures)
 const rooms = {};
 
 function generateRoomCode() {
-  return Math.random().toString(36).substring(2, 6).toUpperCase();
+  let code;
+  do {
+    code = Math.random()
+      .toString(36)
+      .substring(2, 6)
+      .toUpperCase();
+  } while (rooms[code]);
+
+  return code;
 }
 
-// Convert card rank strings into numerical values for evaluation layout parameters
-function getNumericRank(rankStr) {
-  if (rankStr === 'A') return 1;
-  if (rankStr === 'J') return 11;
-  if (rankStr === 'Q') return 12;
-  if (rankStr === 'K') return 13;
-  return parseInt(rankStr, 10);
+
+function shuffle(arr){
+  return [...arr].sort(()=>Math.random()-0.5);
 }
 
-function assignGameRoles(room) {
-  const imposterIndex = Math.floor(Math.random() * room.players.length);
-  room.players.forEach((p, idx) => {
-    room.roles[p.id] = (idx === imposterIndex) ? 'imposter' : 'crewmate';
+
+function assignRoles(room){
+
+  const imposter =
+    room.players[
+      Math.floor(
+        Math.random()*room.players.length
+      )
+    ];
+
+  room.players.forEach(p=>{
+    room.roles[p.id] =
+      p.id === imposter.id
+      ? "imposter"
+      : "crewmate";
   });
 }
 
-function handleNextTurnIndex(roomCode) {
-  const room = rooms[roomCode];
-  if (!room) return;
 
-  const currentRoundAnswers = room.answers[room.round] || {};
-  const nextPlayer = room.turnOrder.find(p => currentRoundAnswers[p.id] === undefined);
+function sendPrivateRoles(room){
 
-  if (nextPlayer) {
-    io.to(roomCode).emit('nextTurnIndex', {
-      activePlayerId: nextPlayer.id,
-      activePlayerName: nextPlayer.name
-    });
-  } else {
-    io.to(roomCode).emit('showAllClues', room);
+  room.players.forEach(player=>{
+
+    io.to(player.id).emit(
+      "roleInfo",
+      {
+        role:
+          room.roles[player.id],
+
+        secret:
+          room.roles[player.id]==="imposter"
+          ? null
+          : room.secret
+      }
+    );
+
+  });
+}
+
+
+
+function nextClueTurn(room){
+
+  const answers =
+    room.answers[room.round] || {};
+
+  const next =
+    room.turnOrder.find(
+      p=>answers[p.id]===undefined
+    );
+
+
+  if(next){
+
+    io.to(room.code)
+    .emit(
+      "nextTurnIndex",
+      {
+        activePlayerId:next.id,
+        activePlayerName:next.name
+      }
+    );
+
+  }else{
+
+    io.to(room.code)
+    .emit(
+      "showAllClues",
+      answers
+    );
+
   }
 }
 
-// Custom function to safely loop card game actions while ignoring out-of-game players
-function advanceSevenClubsTurn(room) {
-  let attempts = 0;
-  do {
-    room.sevenClubsTurnIndex = (room.sevenClubsTurnIndex + 1) % room.players.length;
-    attempts++;
-    
-    let nextPlayer = room.players[room.sevenClubsTurnIndex];
-    let hand = room.playerHands[nextPlayer.id] || [];
-    
-    if (hand.length > 0) {
-      // Valid player found with cards still remaining
-      break;
-    }
-  } while (attempts <= room.players.length);
+
+
+function createDeck(){
+
+ const suits=[
+  "Clubs",
+  "Diamonds",
+  "Hearts",
+  "Spades"
+ ];
+
+ const ranks=[
+  "A","2","3","4","5","6",
+  "7","8","9","10",
+  "J","Q","K"
+ ];
+
+
+ let deck=[];
+
+
+ suits.forEach(s=>{
+  ranks.forEach(r=>{
+   deck.push({
+    suit:s,
+    rank:r
+   });
+  });
+ });
+
+
+ return shuffle(deck);
 }
 
-io.on('connection', (socket) => {
-  console.log(`Connected client: ${socket.id}`);
 
-  // 1. LOBBY CREATION
-  socket.on('createRoom', ({ playerName, gameMode }) => {
-    const code = generateRoomCode();
-    rooms[code] = {
-      code: code,
-      hostId: socket.id,
-      gameMode: gameMode || 'number',
-      phase: 'lobby',
-      round: 1,
-      players: [{ id: socket.id, name: playerName }],
-      roles: {},
-      theNumber: null,
-      turnOrder: [],
-      answers: {},
-      voteTally: {},
-      readyPlayers: {},
-      continueVotes: {},
-      failedImposterGuess: null,
-      tieBreakerActive: false,
-      // Seven of Clubs State parameters
-      playerHands: {},
-      standingsList: [],
-      sevenClubsTurnIndex: 0
-    };
 
-    socket.join(code);
-    socket.emit('roomUpdated', rooms[code]);
-  });
+function advanceCardTurn(room){
 
-  // 2. LOBBY JOINING
-  socket.on('joinRoom', ({ roomCode, playerName }) => {
-    const cleanedCode = roomCode.trim().toUpperCase();
-    const room = rooms[cleanedCode];
+ let tries=0;
 
-    if (!room) return socket.emit('errorMsg', 'Room workspace not discovered.');
-    if (room.phase !== 'lobby') return socket.emit('errorMsg', 'Game session already deployed.');
+ while(tries < room.players.length){
 
-    room.players.push({ id: socket.id, name: playerName });
-    socket.join(cleanedCode);
-    io.to(cleanedCode).emit('roomUpdated', room);
-  });
+  room.cardTurn =
+   (room.cardTurn+1)
+   %
+   room.players.length;
 
-  // 3. GAME INITIALIZATION
-  socket.on('startGame', ({ roomCode }) => {
-    const room = rooms[roomCode];
-    if (!room || room.hostId !== socket.id) return;
-    
-    // Safety verification check: Allow game to spin up with 2 or more players smoothly!
-    if (room.players.length < 2) {
-      return socket.emit('errorMsg', 'You need at least 2 players to start a session.');
-    }
 
-    if (room.gameMode === 'card') {
-      room.phase = 'sevenClubsBoard';
-      room.sevenClubsTurnIndex = 0;
-      room.standingsList = [];
-      room.playerHands = {};
-      
-      // Setup dynamic board layout grid structure
-      const layoutGrid = [];
-      for (let r = 1; r <= 4; r++) {
-        for (let c = 1; c <= 3; c++) {
-          layoutGrid.push({
-            row: r,
-            col: c,
-            hasSuit: (r === 1 && c === 1),
-            displayValue: (r === 1 && c === 1) ? "♣7" : "—"
-          });
-        }
-      }
+  let p =
+   room.players[room.cardTurn];
 
-      // Seed player hand decks
-      room.players.forEach((p, idx) => {
-        room.playerHands[p.id] = [
-          { suit: 'Clubs', rank: '7', suitIcon: '♣', isPlayable: true },
-          { suit: 'Hearts', rank: 'A', suitIcon: '♥', isPlayable: true },
-          { suit: 'Diamonds', rank: 'K', suitIcon: '♦', isPlayable: true }
-        ];
-      });
 
-      // Update baseline states to match
-      room.players.forEach((p) => {
-        const activePlayer = room.players[room.sevenClubsTurnIndex];
-        const currentHand = room.playerHands[p.id] || [];
-        
-        io.to(p.id).emit('sevenClubsUpdateBoard', {
-          activePlayerId: activePlayer.id,
-          activePlayerName: activePlayer.name,
-          neighborCardCount: 3, 
-          gridCells: layoutGrid,
-          myHand: currentHand
-        });
-      });
-    } else {
-      room.phase = 'role';
-      room.theNumber = room.gameMode === 'rj' ? "SPACE STATION" : Math.floor(Math.random() * 10) + 1;
-      assignGameRoles(room);
+  if(
+   room.hands[p.id] &&
+   room.hands[p.id].length
+  ){
+    return;
+  }
 
-      io.to(roomCode).emit('goToRoleScreen', room);
-    }
-  });
+  tries++;
+ }
+}
 
-  // 4. SEVEN OF CLUBS INTEGRATED GAME ACTIONS
-  socket.on('sevenClubsPlayCard', (data) => {
-    if (!data || !data.roomCode) return;
-    
-    const room = rooms[data.roomCode];
-    if (!room) return;
 
-    // SAFE ENCAPSULATION WRAPPER - Prevents ReferenceError crashes
-    const cardRank = data.rank;
-    const cardSuit = data.suit;
-    const playerObj = room.players.find(p => p.id === socket.id);
-    if (!playerObj) return;
 
-    // Process and filter player hand array modifications
-    let userHand = room.playerHands[socket.id] || [];
-    room.playerHands[socket.id] = userHand.filter(c => !(c.rank === cardRank && c.suit === cardSuit));
+io.on("connection",(socket)=>{
 
-    // Verify special popups for Ace or King card conditions
-    let isSpecial = (cardRank === 'A' || cardRank === 'K');
 
-    // Transmit structural card action message directly to client screens
-    io.to(data.roomCode).emit('clueActionLogged', {
-      text: `${playerObj.name} successfully deployed card element: [${cardRank} of ${cardSuit}]!`,
-      isSpecialRank: isSpecial
-    });
+console.log(
+"connected",
+socket.id
+);
 
-    // CHECK HAND SIZE SHEDDING: Check placement elimination standings
-    if (room.playerHands[socket.id].length === 0) {
-      if (!room.standingsList.some(s => s.id === socket.id)) {
-        room.standingsList.push({ id: socket.id, name: playerObj.name });
-      }
-    }
 
-    // CHECK TERMINAL MULTIPLAYER END GAME ROUND CONDITIONS
-    let activePlayersRemaining = room.players.filter(p => (room.playerHands[p.id] || []).length > 0);
 
-    if (activePlayersRemaining.length <= 1) {
-      // Capture trailing player left inside the final spot matrix array map
-      if (activePlayersRemaining.length === 1) {
-        const lastPlayer = activePlayersRemaining[0];
-        if (!room.standingsList.some(s => s.id === lastPlayer.id)) {
-          room.standingsList.push({ id: lastPlayer.id, name: lastPlayer.name });
-        }
-      }
+socket.on(
+"createRoom",
+({playerName,gameMode})=>{
 
-      room.phase = 'result';
-      io.to(data.roomCode).emit('goToResultScreen', room);
-    } else {
-      // Loop to next eligible candidate with items to place down
-      advanceSevenClubsTurn(room);
-      
-      // Update all tables live
-      const nextActivePlayer = room.players[room.sevenClubsTurnIndex];
-      room.players.forEach(p => {
-        io.to(p.id).emit('sevenClubsUpdateBoard', {
-          activePlayerId: nextActivePlayer.id,
-          activePlayerName: nextActivePlayer.name,
-          neighborCardCount: 3,
-          gridCells: [], // Layout updates calculated locally via engine
-          myHand: room.playerHands[p.id] || []
-        });
-      });
-    }
-  });
 
-  socket.on('sevenClubsPickFromNeighbor', ({ roomCode }) => {
-    if (!roomCode || !rooms[roomCode]) return;
-    const room = rooms[roomCode];
-    const playerObj = room.players.find(p => p.id === socket.id);
-    
-    io.to(roomCode).emit('clueActionLogged', {
-      text: `${playerObj ? playerObj.name : 'A player'} pulled a deck item from their neighbor's target alignment.`,
-      isSpecialRank: false
-    });
-  });
+const code =
+generateRoomCode();
 
-  // 5. ACTION READY SIGNALING
-  socket.on('playerReady', ({ roomCode }) => {
-    const room = rooms[roomCode];
-    if (!room) return;
 
-    room.readyPlayers[socket.id] = true;
-    io.to(roomCode).emit('readyListUpdated', room.readyPlayers);
+rooms[code]={
 
-    if (Object.keys(room.readyPlayers).length === room.players.length) {
-      room.phase = 'turnReveal';
-      room.turnOrder = [...room.players].sort(() => Math.random() - 0.5);
-      io.to(roomCode).emit('goToTurnRevealScreen', room);
-    }
-  });
+ code,
 
-  // 6. TURN CYCLING LOGIC
-  socket.on('startAnswering', ({ roomCode }) => {
-    const room = rooms[roomCode];
-    if (!room || room.hostId !== socket.id) return;
+ hostId:socket.id,
 
-    room.phase = 'answer';
-    if (!room.answers[room.round]) {
-      room.answers[room.round] = {};
-    }
+ gameMode:
+ gameMode||"number",
 
-    io.to(roomCode).emit('goToAnswerScreen', room);
-    handleNextTurnIndex(roomCode);
-  });
 
-  // 7. CLUE EVALUATION SUBMISSIONS
-  socket.on('submitClue', ({ roomCode, clueWord }) => {
-    const room = rooms[roomCode];
-    if (!room) return;
+ phase:"lobby",
 
-    const roundAnswers = room.answers[room.round];
-    roundAnswers[socket.id] = clueWord;
+ players:[
+  {
+   id:socket.id,
+   name:playerName
+  }
+ ],
 
-    io.to(roomCode).emit('clueRevealedLive', {
-      playerId: socket.id,
-      playerName: room.players.find(p => p.id === socket.id)?.name || "Unknown",
-      clueWord: clueWord,
-      roundAnswers: roundAnswers
-    });
 
-    handleNextTurnIndex(roomCode);
-  });
+ roles:{},
 
-  // 8. ROUTING NEXT PHASES & CONSENSUS
-  socket.on('nextPhase', ({ roomCode, targetPhase }) => {
-    const room = rooms[roomCode];
-    if (!room || room.hostId !== socket.id) return;
+ secret:null,
 
-    if (targetPhase === 'round2') {
-      room.round = 2;
-      room.answers[room.round] = {};
-      io.to(roomCode).emit('goToAnswerScreen', room);
-      handleNextTurnIndex(roomCode);
-    } else if (targetPhase === 'askContinue') {
-      room.continueVotes = {};
-      io.to(roomCode).emit('promptContinueVote');
-    } else if (targetPhase === 'vote') {
-      room.phase = 'vote';
-      io.to(roomCode).emit('goToVoteScreen', room);
-    }
-  });
+ round:1,
 
-  // 9. CONTINUE VOTING MECHANICS
-  socket.on('submitContinueChoice', ({ roomCode, choice }) => {
-    const room = rooms[roomCode];
-    if (!room) return;
+ turnOrder:[],
 
-    room.continueVotes[socket.id] = choice;
-    io.to(roomCode).emit('continueStatusUpdated', room.continueVotes);
+ answers:{},
 
-    if (Object.keys(room.continueVotes).length === room.players.length) {
-      const moreVotes = Object.values(room.continueVotes).filter(v => v === 'more').length;
-      if (moreVotes > room.players.length / 2) {
-        room.round += 1;
-        room.answers[room.round] = {};
-        io.to(roomCode).emit('goToAnswerScreen', room);
-        handleNextTurnIndex(roomCode);
-      } else {
-        room.phase = 'vote';
-        io.to(roomCode).emit('goToVoteScreen', room);
-      }
-    }
-  });
+ votes:{},
 
-  // 10. FINAL BALLOT AND VOTE TALLY
-  socket.on('castVote', ({ roomCode, targetPlayerId }) => {
-    const room = rooms[roomCode];
-    if (!room) return;
+ voters:{},
 
-    room.voteTally[targetPlayerId] = (room.voteTally[targetPlayerId] || 0) + 1;
-    io.to(roomCode).emit('voteStatusUpdated', { [socket.id]: true });
 
-    const totalVotesCast = Object.values(room.voteTally).reduce((sum, count) => sum + count, 0);
-    if (totalVotesCast === room.players.length) {
-      const tallyEntries = Object.entries(room.voteTally);
-      let maxVotes = -1;
-      let highestVotedPlayers = [];
+ hands:{},
 
-      tallyEntries.forEach(([playerId, count]) => {
-        if (count > maxVotes) {
-          maxVotes = count;
-          highestVotedPlayers = [playerId];
-        } else if (count === maxVotes) {
-          highestVotedPlayers.push(playerId);
-        }
-      });
+ board:{},
 
-      if (highestVotedPlayers.length > 1) {
-        room.tieBreakerActive = true;
-        room.voteTally = {};
-        room.gameOverReason = "⚠️ EMERGENCY BALANCING TIE! Ballot counts are deadlocked.";
-        io.to(roomCode).emit('goToResultScreen', room);
-      } else {
-        const eliminatedId = highestVotedPlayers[0];
-        const isImposterEliminated = (room.roles[eliminatedId] === 'imposter');
-        room.phase = 'result';
-        room.tieBreakerActive = false;
+ standings:[],
 
-        if (isImposterEliminated) {
-          room.gameOverReason = "🎉 CREWMATE VICTORY! The Imposter profile was exposed.";
-        } else {
-          room.gameOverReason = "💥 IMPOSTER VICTORY! Crewmates exiled an innocent profile.";
-        }
-        io.to(roomCode).emit('goToResultScreen', room);
-      }
-    }
-  });
+ cardTurn:0
 
-  // 11. CLANDESTINE BREAK COVER SHORTCUT
-  socket.on('imposterGuessNumber', ({ roomCode, guessedNumber }) => {
-    const room = rooms[roomCode];
-    if (!room) return;
+};
 
-    room.phase = 'result';
-    room.tieBreakerActive = false;
-    const isCorrect = String(guessedNumber).trim().toUpperCase() === String(room.theNumber).trim().toUpperCase();
 
-    if (isCorrect) {
-      room.gameOverReason = "💥 IMPOSTER VICTORY! The hidden objective parameter was accurately compromised!";
-    } else {
-      room.failedImposterGuess = guessedNumber;
-      room.gameOverReason = "🎉 CREWMATE VICTORY! The Imposter broke coverage parameters with an incorrect guess.";
-    }
-    io.to(roomCode).emit('goToResultScreen', room);
-  });
+socket.join(code);
 
-  // 12. RESET CYCLE FOR NEW MATCH
-  socket.on('resetGame', ({ roomCode }) => {
-    const room = rooms[roomCode];
-    if (!room) return;
+socket.emit(
+"roomUpdated",
+rooms[code]
+);
 
-    room.phase = 'lobby';
-    room.round = 1;
-    room.roles = {};
-    room.theNumber = null;
-    room.turnOrder = [];
-    room.answers = {};
-    room.voteTally = {};
-    room.readyPlayers = {};
-    room.continueVotes = {};
-    room.failedImposterGuess = null;
-    room.tieBreakerActive = false;
-    room.playerHands = {};
-    room.standingsList = [];
-    room.sevenClubsTurnIndex = 0;
 
-    io.to(roomCode).emit('roomUpdated', room);
-  });
-
-  // 13. STATE CLEANUP UPON DISCONNECTION
-  socket.on('disconnect', () => {
-    console.log(`Client disconnected: ${socket.id}`);
-    for (const code in rooms) {
-      rooms[code].players = rooms[code].players.filter(p => p.id !== socket.id);
-      if (rooms[code].players.length === 0) {
-        delete rooms[code];
-      } else {
-        if (rooms[code].hostId === socket.id) {
-          rooms[code].hostId = rooms[code].players[0].id;
-        }
-        io.to(code).emit('roomUpdated', rooms[code]);
-      }
-    }
-  });
 });
 
-server.listen(PORT, () => {
-  console.log(`Deploy Matrix confirmed active on port: ${PORT}`);
+
+
+
+
+socket.on(
+"joinRoom",
+({roomCode,playerName})=>{
+
+
+const code =
+roomCode.toUpperCase();
+
+
+const room =
+rooms[code];
+
+
+if(!room)
+return socket.emit(
+"errorMsg",
+"Room not found"
+);
+
+
+if(room.phase!=="lobby")
+return;
+
+
+room.players.push({
+ id:socket.id,
+ name:playerName
+});
+
+
+socket.join(code);
+
+
+io.to(code)
+.emit(
+"roomUpdated",
+room
+);
+
+
+});
+
+
+
+
+
+
+socket.on(
+"startGame",
+({roomCode})=>{
+
+
+const room =
+rooms[roomCode];
+
+
+if(
+!room ||
+room.hostId!==socket.id
+)return;
+
+
+
+if(room.players.length<2)
+return socket.emit(
+"errorMsg",
+"Need 2 players"
+);
+
+
+
+
+if(room.gameMode==="card"){
+
+
+room.phase="cards";
+
+
+room.hands={};
+
+
+let deck=createDeck();
+
+
+room.players.forEach(p=>{
+ room.hands[p.id]=[];
+});
+
+
+let i=0;
+
+
+while(deck.length){
+
+ let p =
+ room.players[
+ i%room.players.length
+ ];
+
+ room.hands[p.id]
+ .push(deck.pop());
+
+ i++;
+}
+
+
+io.to(roomCode)
+.emit(
+"sevenClubsStart",
+{
+ players:room.players,
+ hand:null
+}
+);
+
+
+
+room.players.forEach(p=>{
+
+io.to(p.id)
+.emit(
+"sevenClubsHand",
+room.hands[p.id]
+);
+
+});
+
+
+return;
+
+}
+
+
+
+
+
+room.phase="roles";
+
+
+room.secret =
+room.gameMode==="rj"
+?
+"SPACE STATION"
+:
+Math.floor(Math.random()*10)+1;
+
+
+assignRoles(room);
+
+
+io.to(roomCode)
+.emit(
+"goToRoleScreen",
+{
+ players:room.players,
+ gameMode:room.gameMode
+}
+);
+
+
+sendPrivateRoles(room);
+
+
+
+});
+// ===============================
+// NUMBER / RJ CLUE FLOW
+// ===============================
+
+
+socket.on(
+"playerReady",
+({roomCode})=>{
+
+const room=rooms[roomCode];
+
+if(!room)return;
+
+
+room.ready =
+room.ready || {};
+
+
+room.ready[socket.id]=true;
+
+
+if(
+Object.keys(room.ready).length
+===
+room.players.length
+){
+
+room.turnOrder =
+shuffle(room.players);
+
+
+room.phase="clue";
+
+
+io.to(roomCode)
+.emit(
+"goToAnswerScreen",
+room
+);
+
+
+nextClueTurn(room);
+
+}
+
+});
+
+
+
+
+
+socket.on(
+"submitClue",
+({roomCode,clueWord})=>{
+
+
+const room =
+rooms[roomCode];
+
+
+if(!room)return;
+
+
+room.answers[room.round] =
+room.answers[room.round]||{};
+
+
+
+if(
+room.answers[room.round][socket.id]
+)return;
+
+
+
+const active =
+room.turnOrder.find(
+p =>
+room.answers[room.round][p.id]
+===undefined
+);
+
+
+
+if(
+!active ||
+active.id!==socket.id
+)return;
+
+
+
+room.answers[room.round][socket.id]
+=
+String(clueWord).trim();
+
+
+
+io.to(roomCode)
+.emit(
+"clueRevealedLive",
+{
+playerId:socket.id,
+clueWord
+}
+);
+
+
+
+nextClueTurn(room);
+
+
+
+});
+
+
+
+
+
+
+// ===============================
+// VOTING
+// ===============================
+
+
+socket.on(
+"castVote",
+({roomCode,targetPlayerId})=>{
+
+
+const room=rooms[roomCode];
+
+
+if(!room)return;
+
+
+room.voters =
+room.voters || {};
+
+
+if(room.voters[socket.id])
+return;
+
+
+
+room.voters[socket.id]
+=
+targetPlayerId;
+
+
+
+room.votes =
+room.votes || {};
+
+
+room.votes[targetPlayerId]
+=
+(room.votes[targetPlayerId]||0)+1;
+
+
+
+if(
+Object.keys(room.voters).length
+===
+room.players.length
+){
+
+
+let winner =
+Object.entries(room.votes)
+.sort((a,b)=>b[1]-a[1])[0][0];
+
+
+const eliminated =
+winner;
+
+
+
+if(
+room.roles[eliminated]
+==="imposter"
+){
+
+room.result =
+"CREWMATES WIN";
+
+}else{
+
+room.result =
+"IMPOSTER WINS";
+
+}
+
+
+
+room.phase="result";
+
+
+io.to(roomCode)
+.emit(
+"goToResultScreen",
+{
+result:room.result
+}
+);
+
+
+}
+
+});
+
+
+
+
+
+
+
+socket.on(
+"imposterGuessNumber",
+({roomCode,guessedNumber})=>{
+
+
+const room=rooms[roomCode];
+
+
+if(!room)return;
+
+
+if(
+String(guessedNumber)
+.trim()
+.toUpperCase()
+===
+String(room.secret)
+.trim()
+.toUpperCase()
+){
+
+room.result =
+"IMPOSTER WINS";
+
+}else{
+
+room.result =
+"CREWMATES WIN";
+
+}
+
+
+room.phase="result";
+
+
+io.to(roomCode)
+.emit(
+"goToResultScreen",
+{
+result:room.result
+}
+);
+
+
+
+});
+
+
+
+
+
+
+
+// ===============================
+// SEVEN CLUBS
+// ===============================
+
+
+socket.on(
+"sevenClubsPlayCard",
+({roomCode,rank,suit})=>{
+
+
+const room =
+rooms[roomCode];
+
+
+if(!room)return;
+
+
+
+const player =
+room.players
+[room.cardTurn];
+
+
+
+if(
+!player ||
+player.id!==socket.id
+)
+return;
+
+
+
+const hand =
+room.hands[socket.id];
+
+
+const index =
+hand.findIndex(
+c =>
+c.rank===rank &&
+c.suit===suit
+);
+
+
+
+if(index===-1)
+return;
+
+
+
+// remove card
+
+const card =
+hand.splice(index,1)[0];
+
+
+
+room.board =
+room.board || {};
+
+room.board[suit] =
+room.board[suit]||[];
+
+
+
+room.board[suit].push(card);
+
+
+
+if(hand.length===0){
+
+if(
+!room.standings.includes(socket.id)
+){
+
+room.standings.push(
+socket.id
+);
+
+}
+
+}
+
+
+
+advanceCardTurn(room);
+
+
+
+io.to(roomCode)
+.emit(
+"sevenClubsUpdateBoard",
+{
+board:room.board,
+activePlayer:
+room.players[room.cardTurn],
+standings:
+room.standings
+}
+);
+
+
+
+});
+
+
+
+
+
+
+
+// ===============================
+// RESET
+// ===============================
+
+
+socket.on(
+"resetGame",
+({roomCode})=>{
+
+
+const room =
+rooms[roomCode];
+
+
+if(!room)return;
+
+
+
+room.phase="lobby";
+
+room.round=1;
+
+room.roles={};
+
+room.secret=null;
+
+room.answers={};
+
+room.votes={};
+
+room.voters={};
+
+room.hands={};
+
+room.board={};
+
+room.standings=[];
+
+
+
+io.to(roomCode)
+.emit(
+"roomUpdated",
+room
+);
+
+
+
+});
+
+
+
+
+
+
+
+// ===============================
+// DISCONNECT CLEANUP
+// ===============================
+
+
+socket.on(
+"disconnect",
+()=>{
+
+
+for(
+const code in rooms
+){
+
+const room =
+rooms[code];
+
+
+room.players =
+room.players.filter(
+p=>p.id!==socket.id
+);
+
+
+
+delete room.roles[socket.id];
+
+delete room.hands[socket.id];
+
+delete room.ready?.[socket.id];
+
+delete room.voters?.[socket.id];
+
+
+
+if(
+room.players.length===0
+){
+
+delete rooms[code];
+
+
+}else{
+
+
+if(
+room.hostId===socket.id
+){
+
+room.hostId =
+room.players[0].id;
+
+}
+
+
+
+io.to(code)
+.emit(
+"roomUpdated",
+room
+);
+
+
+}
+
+
+}
+
+
+});
+
+
+
+});
+
+
+
+
+
+server.listen(
+PORT,
+()=>{
+
+console.log(
+`Server running on ${PORT}`
+);
+
 });
