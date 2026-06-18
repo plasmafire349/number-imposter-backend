@@ -60,8 +60,15 @@ function shuffleDeck(deck) {
 
 function syncSevenClubsState(room) {
   const activePlayer = room.players[room.sevenState.activeIndex];
-  const leftNeighborIndex = (room.sevenState.activeIndex + 1) % room.players.length;
-  const leftNeighbor = room.players[leftNeighborIndex];
+
+  // Compile a list of how many cards every player has left
+  const playerCardCounts = room.players.map(p => {
+    return {
+      name: p.name,
+      id: p.id,
+      count: (room.sevenState.hands[p.id] || []).length
+    };
+  });
 
   room.players.forEach((p) => {
     const hand = room.sevenState.hands[p.id] || [];
@@ -82,14 +89,33 @@ function syncSevenClubsState(room) {
 
     const hasNoMoves = !formattedHand.some(c => c.isPlayable);
 
+    // Build the 3x4 layout matrix displaying real card values instead of pure numbers
     const gridCells = [];
     let cellIndex = 1;
     SUITS.forEach(s => {
       const track = room.sevenState.board[s.name];
       if (track.placed) {
-        gridCells.push({ row: cellIndex, col: 1, hasSuit: true, displayValue: `${track.min === 7 ? '' : '... '}${RANKS[track.min - 1]}` });
-        gridCells.push({ row: cellIndex, col: 2, hasSuit: true, displayValue: `7 ${s.icon}` });
-        gridCells.push({ row: cellIndex, col: 3, hasSuit: true, displayValue: `${track.max === 7 ? '' : RANKS[track.max - 1]} ...` });
+        // Left Column: Minimum card placed on this track (if below 7)
+        gridCells.push({ 
+          row: cellIndex, 
+          col: 1, 
+          hasSuit: true, 
+          displayValue: track.min < 7 ? `${RANKS[track.min - 1]} ${s.icon}` : '—' 
+        });
+        // Center Column: The core anchor 7
+        gridCells.push({ 
+          row: cellIndex, 
+          col: 2, 
+          hasSuit: true, 
+          displayValue: `7 ${s.icon}` 
+        });
+        // Right Column: Maximum card placed on this track (if above 7)
+        gridCells.push({ 
+          row: cellIndex, 
+          col: 3, 
+          hasSuit: true, 
+          displayValue: track.max > 7 ? `${RANKS[track.max - 1]} ${s.icon}` : '—' 
+        });
       } else {
         gridCells.push({ row: cellIndex, col: 1, hasSuit: false, displayValue: '—' });
         gridCells.push({ row: cellIndex, col: 2, hasSuit: false, displayValue: `(7 of ${s.name})` });
@@ -104,12 +130,13 @@ function syncSevenClubsState(room) {
       myHand: formattedHand,
       gridCells: gridCells,
       hasNoMoves: hasNoMoves,
-      neighborCardCount: (room.sevenState.hands[leftNeighbor.id] || []).length
+      playerCardCounts: playerCardCounts
     });
   });
 }
 
-function processNextSevenClubsTurn(room) {
+function processNextSevenClubsTurn(room, lastPlayedRank) {
+  // Check win condition: does any player have 0 cards left?
   for (let p of room.players) {
     if (room.sevenState.hands[p.id] && room.sevenState.hands[p.id].length === 0) {
       room.phase = 'result';
@@ -124,8 +151,16 @@ function processNextSevenClubsTurn(room) {
     }
   }
 
-  room.sevenState.activeIndex = (room.sevenState.activeIndex + 1) % room.players.length;
-  syncSevenClubsState(room);
+  // Rule Check: If they played an Ace ('A') or a King ('K'), they get another turn!
+  if (lastPlayedRank === 'A' || lastPlayedRank === 'K') {
+    const activePlayer = room.players[room.sevenState.activeIndex];
+    io.to(room.code).emit('gameLogNotice', `⚡ ${activePlayer.name} gets an extra turn for playing a ${lastPlayedRank}!`);
+    syncSevenClubsState(room);
+  } else {
+    // Normal turn progression
+    room.sevenState.activeIndex = (room.sevenState.activeIndex + 1) % room.players.length;
+    syncSevenClubsState(room);
+  }
 }
 
 // ─── SOCKET CONNECTION ROUTER ─────────────────────────────────
@@ -197,6 +232,7 @@ io.on('connection', (socket) => {
         pIdx++;
       }
 
+      // CRITICAL FIX: Establish player holding the exact "7 of Clubs" to begin turn index 0
       room.players.forEach((p, index) => {
         const hand = room.sevenState.hands[p.id];
         if (hand.some(c => c.suit === 'Clubs' && c.rank === '7')) {
@@ -266,7 +302,7 @@ io.on('connection', (socket) => {
 
     if (legal) {
       hand.splice(cardIdx, 1);
-      processNextSevenClubsTurn(room);
+      processNextSevenClubsTurn(room, card.rank);
     }
   });
 
@@ -286,7 +322,8 @@ io.on('connection', (socket) => {
       const stolenCard = neighborHand.splice(randIdx, 1)[0];
       room.sevenState.hands[socket.id].push(stolenCard);
 
-      processNextSevenClubsTurn(room);
+      // Passing or drawing counts as a standard non-bonus card action sequence
+      processNextSevenClubsTurn(room, null);
     }
   });
 
