@@ -32,38 +32,28 @@ function generateRoomCode() {
   return code;
 }
 
-// Map ranks to numeric values for strict mathematical sequential validation
+// Convert game card ranks to values for mathematical sequencing check
 const RANK_VALUES = { '7': 7, '8': 8, '9': 9, '10': 10, 'J': 11, 'Q': 12, 'K': 13, 'A': 14 };
 
 /**
- * Initializes a structured 4x8 grid representing 4 dedicated suit rows.
- * Columns represent chronologically ascending slots from 7 up to Ace.
+ * Reverts back to your original 4 Rows x 3 Columns grid profile mapping structure.
  */
 function initializeSevenClubsGrid() {
-  const suits = [
-    { name: 'Clubs', icon: '♣' },
-    { name: 'Spades', icon: '♠' },
-    { name: 'Hearts', icon: '♥' },
-    { name: 'Diamonds', icon: '♦' }
-  ];
-  const ranks = ['7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
   const grid = [];
   let index = 1;
-
-  suits.forEach((suit, rIdx) => {
-    ranks.forEach((rank, cIdx) => {
+  for (let row = 1; row <= 4; row++) {
+    for (let col = 1; col <= 3; col++) {
       grid.push({
         id: index++,
-        row: rIdx + 1,
-        col: cIdx + 1,
-        suitName: suit.name,
-        suitIcon: suit.icon,
-        rank: rank,
-        hasCard: false,
-        displayValue: '—'
+        row: row,
+        col: col,
+        hasSuit: false,
+        displayValue: '—',
+        suitName: null,
+        rank: null
       });
-    });
-  });
+    }
+  }
   return grid;
 }
 
@@ -358,7 +348,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  // STRICT ADJACENCY PLACEMENT ENGINE
+  // CARD PLACEMENT ENGINE FOR 3x4 GRID
   socket.on('sevenClubsPlayCard', ({ roomCode, suit, rank }) => {
     const room = rooms[roomCode];
     if (!room) return;
@@ -373,14 +363,14 @@ io.on('connection', (socket) => {
     let isValidPlay = false;
 
     if (cardPlayed.rank === '7') {
-      // 7s are foundational and can always be placed to activate their row sequence
+      // 7s can always be placed to open up a suit path on the board
       isValidPlay = true;
     } else {
-      // Non-7 cards require the exact preceding mathematical neighbor to be present on the board
+      // Must check if the exact direct numeric predecessor card of this suit is already on the board grid
       const targetValue = RANK_VALUES[cardPlayed.rank];
       isValidPlay = room.sevenClubsGrid.some(cell => 
         cell.suitName === cardPlayed.suit && 
-        cell.hasCard && 
+        cell.hasSuit && 
         RANK_VALUES[cell.rank] === (targetValue - 1)
       );
     }
@@ -389,17 +379,20 @@ io.on('connection', (socket) => {
       return socket.emit('errorMsg', `Validation Error: You can't lay down the ${rank} of ${suit} yet. Adjacency sequences must build upwards consecutively from 7.`);
     }
 
-    // Process valid card placement updates
+    // Valid play, pull from active player hand
     activePlayer.hand.splice(cardIndex, 1);
 
-    // Map card explicitly to its preallocated structural grid coordinates
-    const designatedCell = room.sevenClubsGrid.find(cell => 
-      cell.suitName === cardPlayed.suit && cell.rank === cardPlayed.rank
-    );
-    
-    if (designatedCell) {
-      designatedCell.hasCard = true;
-      designatedCell.displayValue = `${cardPlayed.rank}${cardPlayed.suitIcon}`;
+    // Look for an exact grid spot already housing this card OR find the next empty grid space to display it
+    let targetCell = room.sevenClubsGrid.find(cell => cell.suitName === cardPlayed.suit && cell.rank === cardPlayed.rank);
+    if (!targetCell) {
+      targetCell = room.sevenClubsGrid.find(cell => !cell.hasSuit);
+    }
+
+    if (targetCell) {
+      targetCell.hasSuit = true;
+      targetCell.suitName = cardPlayed.suit;
+      targetCell.rank = cardPlayed.rank;
+      targetCell.displayValue = `${cardPlayed.rank}${cardPlayed.suitIcon}`;
     }
 
     io.to(roomCode).emit('clueActionLogged', {
@@ -538,9 +531,9 @@ function sendSevenClubsStateUpdate(room) {
         validRuleMatch = true;
       } else {
         const valueNum = RANK_VALUES[card.rank];
-        // Ensure the exact numerical sequence card under the identical suit string is present
+        // Ensure the exact numerical neighbor card (rank - 1) of the same suit is present on the board
         validRuleMatch = room.sevenClubsGrid.some(cell => 
-          cell.suitName === card.suit && cell.hasCard && RANK_VALUES[cell.rank] === (valueNum - 1)
+          cell.suitName === card.suit && cell.hasSuit && RANK_VALUES[cell.rank] === (valueNum - 1)
         );
       }
 
