@@ -383,7 +383,6 @@ function sendSevensStateUpdate(room) {
   const nextSeatIdx = (room.sevensActivePlayerIdx + 1) % room.players.length;
   const leftNeighbor = room.players[nextSeatIdx];
 
-  // Map out a structural catalog detailing player inventory quantities
   const playerHandCounts = {};
   room.players.forEach(p => {
     playerHandCounts[p.id] = p.hand ? p.hand.length : 0;
@@ -423,7 +422,7 @@ function sendSevensStateUpdate(room) {
       gridCells: room.sevensGrid,
       myHand: dynamicHand,
       neighborCardCount: leftNeighbor ? leftNeighbor.hand.length : 0,
-      allHandCounts: playerHandCounts // Expose layout counts globally across matrix
+      allHandCounts: playerHandCounts
     });
   });
 }
