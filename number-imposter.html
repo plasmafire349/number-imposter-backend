@@ -152,7 +152,7 @@
     <div class="logo">GAME STATION</div>
     <div class="logo-sub">Select variant & deploy lobby</div>
 
-    <div class="card">
+    <div class="card" id="lobby-create-card">
       <div class="card-title"><span class="dot"></span> Select Game Variant:</div>
       <div class="variant-picker-grid">
         <div class="variant-choice-btn selected" id="menu-opt-number" onclick="selectMenuGameMode('number')">
@@ -174,7 +174,7 @@
       </div>
     </div>
 
-    <div class="card">
+    <div class="card" id="lobby-join-card">
       <div class="flex-row">
         <input type="text" id="join-code" placeholder="ROOM CODE" maxlength="4" style="text-transform:uppercase; letter-spacing:2px;">
         <button class="btn btn-secondary" onclick="triggerLobbyJoin()">Join Game</button>
@@ -187,6 +187,10 @@
       <div class="card-title"><span class="dot"></span> Room Code</div>
       <div style="font-family:'Syne',sans-serif; font-size:2.5rem; font-weight:800; letter-spacing:6px; color:var(--purple-pale); text-align:center;" id="display-code">—</div>
       <div id="lobby-mode-label-sub" style="text-align:center; font-size:0.8rem; color:var(--accent); margin-top:6px; font-weight:700;">Selected Variant: <span>Number Imposter</span></div>
+      
+      <div class="mt-12">
+        <button class="btn btn-secondary btn-full" id="copy-link-btn" onclick="copyInviteLink()">🔗 Copy Invite Link</button>
+      </div>
     </div>
 
     <div class="card">
@@ -335,6 +339,37 @@ let state = {
   tieBreakerActive: false
 };
 
+// NEW: Read incoming invite parameters immediately on page load
+window.addEventListener('DOMContentLoaded', () => {
+  const urlParams = new URLSearchParams(window.location.search);
+  const roomParam = urlParams.get('room');
+  if (roomParam) {
+    const cleanedCode = roomParam.trim().toUpperCase();
+    document.getElementById('join-code').value = cleanedCode;
+    // Hide variant selection to keep the joining screen clean for guests
+    document.getElementById('lobby-create-card').style.display = 'none';
+  }
+});
+
+// NEW: Function to generate and copy the link
+function copyInviteLink() {
+  if (!state.roomCode) return;
+  // Creates a link like http://localhost:3000/?room=ABCD
+  const inviteLink = `${window.location.origin}/?room=${state.roomCode}`;
+  
+  navigator.clipboard.writeText(inviteLink).then(() => {
+    const btn = document.getElementById('copy-link-btn');
+    btn.textContent = "✓ Link Copied!";
+    btn.style.borderColor = "var(--crewmate)";
+    setTimeout(() => {
+      btn.textContent = "🔗 Copy Invite Link";
+      btn.style.borderColor = "rgba(139,92,246,0.3)";
+    }, 2000);
+  }).catch(err => {
+    alert("Could not automatically copy. Share this link: " + inviteLink);
+  });
+}
+
 function selectMenuGameMode(targetMode) {
   state.gameMode = targetMode;
   document.querySelectorAll('.variant-choice-btn').forEach(el => el.classList.remove('selected'));
@@ -353,9 +388,16 @@ function triggerLobbyCreation() {
 }
 
 function triggerLobbyJoin() {
-  const nameInput = document.getElementById('shared-identity-name').value.trim();
+  // Pull from whichever name input is available or use a prompt if it was hidden
+  let nameInput = document.getElementById('shared-identity-name').value.trim();
+  if (!nameInput) {
+    nameInput = prompt("Enter your name to join the workspace:");
+    if (!nameInput || !nameInput.trim()) return;
+    nameInput = nameInput.trim();
+  }
+  
   const roomCodeInput = document.getElementById('join-code').value.trim().toUpperCase();
-  if(!nameInput || !roomCodeInput) { alert("Provide both your name and the room code!"); return; }
+  if(!roomCodeInput) { alert("Provide a room code!"); return; }
   state.playerName = nameInput;
   state.isHost = false;
   socket.emit('joinRoom', { roomCode: roomCodeInput, playerName: nameInput });
@@ -537,7 +579,6 @@ socket.on('sevenClubsUpdateBoard', (gameData) => {
   }
 });
 
-// NEW: Real-time broadcast listener for King and Ace matrix adjustments
 socket.on('sevenClubsCardAlertPopup', (data) => {
   alert(`🚨 CRITICAL HIGHER PROFILE ACTION!\n\nPlayer "${data.player}" successfully placed the ${data.card} on the workspace board grid matrix!`);
 });
@@ -638,7 +679,7 @@ socket.on('nextTurnIndex', ({ activePlayerId, activePlayerName }) => {
     banner.textContent = "⭐️ YOUR TURN TO TRANSMIT A CLUE WORD! ⭐️";
     document.getElementById('clue-submit-btn').disabled = false;
     document.getElementById('answer-input-card').style.display = 'block';
-    document.getElementById('answer-waiting-card').style.display = 'none';
+    document.getElementById('answer-waiting-card').style.display = 'block';
   } else {
     banner.textContent = `Awaiting input metrics from: ${activePlayerName}...`;
     document.getElementById('answer-input-card').style.display = 'none';
