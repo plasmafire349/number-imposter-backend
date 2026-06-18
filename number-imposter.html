@@ -36,7 +36,7 @@
     min-height: 100vh;
     overflow-x: hidden;
     position: relative;
-    padding-bottom: 80px;
+    padding-bottom: 60px;
   }
 
   body::before {
@@ -68,10 +68,10 @@
 
   .hud-badge { display: none; background: rgba(16,185,129,0.15); border: 1px solid var(--crewmate); border-radius: 8px; padding: 10px; font-family: 'Syne', sans-serif; font-weight: 700; text-align: center; font-size: 1.1rem; color: var(--crewmate); margin-bottom: 16px; width: 100%; }
 
-  input[type="text"], input[type="number"] { width: 100%; background: var(--surface2); border: 1px solid rgba(139,92,246,0.3); border-radius: 8px; padding: 14px 16px; color: var(--text); font-family: 'Space Mono', monospace; outline: none; transition: border-color 0.2s; position: relative; z-index: 10; }
-  input[type="text"]:focus, input[type="number"]:focus { border-color: var(--purple-bright); }
+  input[type="text"], input[type="number"] { width: 100%; background: var(--surface2); border: 1px solid rgba(139,92,246,0.3); border-radius: 8px; padding: 14px 16px; color: var(--text); font-family: 'Space Mono', monospace; outline: none; transition: border-color 0.2s; }
+  input[type="text"]:focus { border-color: var(--purple-bright); }
 
-  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 14px 24px; border-radius: 8px; border: none; font-family: 'Space Mono', monospace; font-size: 0.85rem; font-weight: 700; cursor: pointer; transition: all 0.18s; position: relative; z-index: 20; }
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 14px 24px; border-radius: 8px; border: none; font-family: 'Space Mono', monospace; font-size: 0.85rem; font-weight: 700; cursor: pointer; transition: all 0.18s; }
   .btn-primary { background: linear-gradient(135deg, var(--purple-mid), var(--accent)); color: white; box-shadow: 0 4px 15px rgba(139,92,246,0.3); width: 100%; }
   .btn-primary:hover { transform: translateY(-1px); }
   .btn-secondary { background: var(--surface2); color: var(--purple-pale); border: 1px solid rgba(139,92,246,0.3); }
@@ -96,7 +96,7 @@
   .board-cell-label { font-size: 0.65rem; color: var(--text-dim); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
   .board-cell-value { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 1rem; }
   
-  .game-card-element { display: inline-flex; flex-direction: column; align-items: center; justify-content: space-between; width: 64px; height: 88px; border-radius: 8px; font-weight: 700; background: #ffffff; color: #000000; padding: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.4); cursor: pointer; user-select: none; transition: transform 0.15s, outline 0.15s, opacity 0.15s; position: relative; flex-shrink: 0; z-index: 10; }
+  .game-card-element { display: inline-flex; flex-direction: column; align-items: center; justify-content: space-between; width: 64px; height: 88px; border-radius: 8px; font-weight: 700; background: #ffffff; color: #000000; padding: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.4); cursor: pointer; user-select: none; transition: transform 0.15s, outline 0.15s, opacity 0.15s; position: relative; flex-shrink: 0; }
   .game-card-element.suit-hearts, .game-card-element.suit-diamonds { color: #e11d48; }
   .game-card-element.suit-clubs, .game-card-element.suit-spades { color: #0f172a; }
   .game-card-element.playable { outline: 3px solid var(--crewmate); box-shadow: 0 0 14px var(--crewmate); transform: translateY(-4px); opacity: 1; }
@@ -119,7 +119,7 @@
   .answer-card { background: var(--surface2); border: 1px solid rgba(139,92,246,0.2); border-radius: 8px; padding: 12px; }
   .answer-text { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 1.1rem; color: var(--accent); }
   
-  .vote-btn { background: var(--surface2); border: 2px solid rgba(139,92,246,0.2); border-radius: 8px; padding: 14px; text-align: center; cursor: pointer; color: var(--text); position: relative; z-index: 15; }
+  .vote-btn { background: var(--surface2); border: 2px solid rgba(139,92,246,0.2); border-radius: 8px; padding: 14px; text-align: center; cursor: pointer; color: var(--text); }
   .vote-btn.selected { border-color: var(--accent); background: rgba(232,121,249,0.1); }
   .vote-btn.disabled { opacity: 0.35; cursor: not-allowed; }
 
@@ -128,8 +128,8 @@
   .vote-bar-track { flex: 1; height: 6px; background: rgba(139,92,246,0.2); border-radius: 3px; overflow: hidden; }
   .vote-bar-fill { height: 100%; background: linear-gradient(90deg, var(--purple-mid), var(--accent)); }
 
-  .imposter-shortcut-bar { position: fixed; bottom: 0; left: 0; right: 0; background: #11050b; border-top: 2px solid var(--imposter); padding: 14px; z-index: 9999; display: none; align-items: center; justify-content: center; gap: 12px; }
-  .imposter-shortcut-bar input { width: 140px; text-align: center; font-weight: 700; background: var(--surface); border: 1px solid var(--imposter); color: var(--imposter); padding: 8px; border-radius: 6px; }
+  .imposter-shortcut-bar { position: fixed; bottom: 0; left: 0; right: 0; background: #11050b; border-top: 2px solid var(--imposter); padding: 14px; z-index: 999; display: none; align-items: center; justify-content: center; gap: 12px; }
+  .imposter-shortcut-bar input { width: 120px; text-align: center; font-weight: 700; background: var(--surface); border: 1px solid var(--imposter); color: var(--imposter); padding: 8px; border-radius: 6px; }
 
   .flex-row { display: flex; gap: 10px; }
   .flex-row .btn { flex: 1; }
@@ -138,7 +138,6 @@
   .mb-8 { margin-bottom: 8px; }
   .player-answered { color: var(--crewmate); font-size: 0.8rem; }
   .player-waiting { color: var(--warn); font-size: 0.8rem; }
-  .hand-counter-badge { background: rgba(139,92,246,0.2); border: 1px solid var(--purple-glow); padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 700; color: var(--purple-pale); }
 </style>
 </head>
 <body>
@@ -209,11 +208,6 @@
     
     <div class="card" id="card-action-feed-banner" style="display:none; background: rgba(16,185,129,0.1); border: 1px solid var(--crewmate); border-radius: 8px; padding: 10px; margin-bottom: 16px; font-size: 0.85rem; text-align: center; color: var(--crewmate);">
       No recent moves logged.
-    </div>
-
-    <div class="card">
-      <div class="card-title"><span class="dot" style="background:var(--accent)"></span> Live Matrix Radar (Hand Counts)</div>
-      <div class="player-list" id="seven-mode-radar-list"></div>
     </div>
 
     <div class="card">
@@ -295,7 +289,7 @@
     <div class="card" id="vote-form-card">
       <div class="card-title"><span class="dot"></span> Cast your Vote</div>
       <div class="vote-grid" id="vote-player-grid"></div>
-      <button class="btn btn-danger btn-full mt-12" onclick="submitVote()" id="submit-vote-btn">Cast Ballot</button>
+      <button class="btn btn-danger btn-full mt-12" onclick="submitVote()" id="submit-vote-btn" disabled>Cast Ballot</button>
     </div>
     <div class="card text-center" id="vote-submitted-card" style="display:none">
       <div class="player-list" id="vote-status-list"></div>
@@ -310,7 +304,7 @@
       <div id="failed-guess-reveal-zone"></div>
     </div>
     <div class="card">
-      <div class="card-title"><span class="dot"></span> Vote Tracking Profile Matrix</div>
+      <div class="card-title"><span class="dot"></span> Leaderboard & Finish Standings Matrix</div>
       <div class="vote-results" id="final-vote-results"></div>
     </div>
     <div class="card" id="host-result-controls" style="display:none">
@@ -360,9 +354,8 @@ window.addEventListener('DOMContentLoaded', () => {
 });
 
 function copyInviteLink() {
-  const code = state.roomCode || document.getElementById('display-code').textContent;
-  if (!code || code === '—') return;
-  const inviteLink = `${window.location.origin}/?room=${code}`;
+  if (!state.roomCode) return;
+  const inviteLink = `${window.location.origin}/?room=${state.roomCode}`;
   navigator.clipboard.writeText(inviteLink).then(() => {
     const btn = document.getElementById('copy-link-btn');
     btn.textContent = "✓ Link Copied!";
@@ -420,85 +413,73 @@ function showScreen(id) {
 }
 
 function startGame() {
-  const code = state.roomCode || document.getElementById('display-code').textContent;
-  if (code && code !== '—') {
-    socket.emit('startGame', { roomCode: code });
+  if (state.isHost && state.roomCode) {
+    socket.emit('startGame', { roomCode: state.roomCode });
   }
 }
 
 function readyForRound() {
-  const code = state.roomCode || document.getElementById('display-code').textContent;
   document.getElementById('ready-action-card').style.display = 'none';
   document.getElementById('waiting-ready-card').style.display = 'block';
-  socket.emit('playerReady', { roomCode: code });
+  socket.emit('playerReady', { roomCode: state.roomCode });
 }
 
 function launchAnsweringPhase() {
-  const code = state.roomCode || document.getElementById('display-code').textContent;
-  socket.emit('startAnswering', { roomCode: code });
+  socket.emit('startAnswering', { roomCode: state.roomCode });
 }
 
 function submitAnswer() {
   const val = document.getElementById('answer-input').value.trim();
   if (!val) return;
-  const code = state.roomCode || document.getElementById('display-code').textContent;
+  document.getElementById('clue-submit-btn').disabled = true;
   document.getElementById('answer-input-card').style.display = 'none';
-  socket.emit('submitClue', { roomCode: code, clueWord: val });
+  socket.emit('submitClue', { roomCode: state.roomCode, clueWord: val });
 }
 
 function voteContinue(choice) {
-  const code = state.roomCode || document.getElementById('display-code').textContent;
   document.getElementById('continue-choice-buttons').style.display = 'none';
-  socket.emit('submitContinueChoice', { roomCode: code, choice: choice });
+  socket.emit('submitContinueChoice', { roomCode: state.roomCode, choice: choice });
 }
 
 function triggerClandestineGuess() {
   const inputEl = document.getElementById('imposter-clandestine-number');
   const num = inputEl.value.trim();
   if (!num) return;
-  const code = state.roomCode || document.getElementById('display-code').textContent;
-  socket.emit('imposterGuessNumber', { roomCode: code, guessedNumber: num });
+  socket.emit('imposterGuessNumber', { roomCode: state.roomCode, guessedNumber: num });
   inputEl.value = '';
 }
 
 function requestNextPhase(target) {
-  const code = state.roomCode || document.getElementById('display-code').textContent;
-  socket.emit('nextPhase', { roomCode: code, targetPhase: target });
+  socket.emit('nextPhase', { roomCode: state.roomCode, targetPhase: target });
 }
 
 function selectVote(id, el) {
   state.selectedVote = id;
   document.querySelectorAll('.vote-btn').forEach(b => b.classList.remove('selected'));
   el.classList.add('selected');
+  document.getElementById('submit-vote-btn').disabled = false;
 }
 
-// Fixed function to send castVote without strict blocks
 function submitVote() {
-  const targetId = state.selectedVote;
-  if (!targetId) { alert("Please click on a player name to select your vote target first!"); return; }
-  const code = state.roomCode || document.getElementById('display-code').textContent;
   document.getElementById('vote-form-card').style.display = 'none';
   document.getElementById('vote-submitted-card').style.display = 'block';
-  socket.emit('castVote', { roomCode: code, targetPlayerId: targetId });
+  socket.emit('castVote', { roomCode: state.roomCode, targetPlayerId: state.selectedVote });
 }
 
 function playAgain() {
-  const code = state.roomCode || document.getElementById('display-code').textContent;
-  socket.emit('resetGame', { roomCode: code });
+  socket.emit('resetGame', { roomCode: state.roomCode });
 }
 
 function playCardFromHand(cardSuite, cardRank) {
-  const code = state.roomCode || document.getElementById('display-code').textContent;
   socket.emit('sevenClubsPlayCard', {
-    roomCode: code,
+    roomCode: state.roomCode,
     suit: cardSuite,
     rank: cardRank
   });
 }
 
 function pickCardFromLeftNeighbor() {
-  const code = state.roomCode || document.getElementById('display-code').textContent;
-  socket.emit('sevenClubsPickFromNeighbor', { roomCode: code });
+  socket.emit('sevenClubsPickFromNeighbor', { roomCode: state.roomCode });
 }
 
 // ─── SOCKET LISTENERS ─────────────────────────────────
@@ -520,8 +501,7 @@ socket.on('roomUpdated', (room) => {
   document.getElementById('crewmate-persistent-hud').style.display = 'none';
   document.getElementById('display-code').textContent = room.code;
   document.getElementById('player-count-label').textContent = `${room.players.length} joined`;
-  document.getElementById('host-controls').style.display = (socket.id === room.hostId) ? 'block' : 'none';
-  state.isHost = (socket.id === room.hostId);
+  document.getElementById('host-controls').style.display = state.isHost ? 'block' : 'none';
   
   let modeString = "🔢 Number Imposter";
   if(state.gameMode === 'rj') modeString = "✨ RJImposter";
@@ -529,7 +509,7 @@ socket.on('roomUpdated', (room) => {
   document.querySelector('#lobby-mode-label-sub span').textContent = modeString;
 
   const btn = document.getElementById('start-btn');
-  if (btn) btn.disabled = room.players.length < 3;
+  if (btn) btn.disabled = room.players.length < 2; // Updated: Now supports 2+ players!
   
   const targetContainer = document.getElementById('waiting-players');
   targetContainer.innerHTML = room.players.map(p => 
@@ -549,30 +529,14 @@ socket.on('sevenClubsUpdateBoard', (gameData) => {
     banner.textContent = `Turn cycle: Active match execution moves to ${gameData.activePlayerName}`;
   }
 
-  const radarContainer = document.getElementById('seven-mode-radar-list');
-  radarContainer.innerHTML = '';
-  if (state.players && gameData.allHandCounts) {
-    state.players.forEach(p => {
-      const cardCount = gameData.allHandCounts[p.id] !== undefined ? gameData.allHandCounts[p.id] : 0;
-      const isCurrentActive = p.id === gameData.activePlayerId ? 'border-color: var(--accent); background: rgba(232,121,249,0.05);' : '';
-      radarContainer.innerHTML += `
-        <div class="player-item" style="${isCurrentActive}">
-          <div>${p.name} ${p.id === state.playerId ? '<span style="color:var(--purple-glow)">(You)</span>' : ''} ${p.id === gameData.activePlayerId ? '⚡️' : ''}</div>
-          <span class="hand-counter-badge">${cardCount} Cards Left</span>
-        </div>
-      `;
-    });
-  }
-
   const matrixContainer = document.getElementById('seven-board-grid-slots');
   matrixContainer.innerHTML = '';
   if (gameData.gridCells) {
     gameData.gridCells.forEach(cell => {
-      const hasCards = cell.cardsPlayed && cell.cardsPlayed.length > 0;
       matrixContainer.innerHTML += `
-        <div class="board-cell ${hasCards ? 'active-suit' : ''}">
-          <div class="board-cell-label">${cell.suitName}</div>
-          <div class="board-cell-value">${cell.display}</div>
+        <div class="board-cell ${cell.hasSuit ? 'active-suit' : ''}">
+          <div class="board-cell-label">Row ${cell.row} · Col ${cell.col}</div>
+          <div class="board-cell-value">${cell.displayValue}</div>
         </div>
       `;
     });
@@ -618,6 +582,11 @@ socket.on('clueActionLogged', (data) => {
   if (logFeed) {
     logFeed.style.display = 'block';
     logFeed.textContent = `📡 ${data.text}`;
+    
+    // Auto popup custom message alerts for A & K cards
+    if(data.isSpecialRank) {
+       alert(`🚨 SPECIAL CARD MOVE: ${data.text}`);
+    }
   }
 });
 
@@ -703,6 +672,7 @@ socket.on('goToAnswerScreen', (room) => {
   document.getElementById('live-answers-grid').innerHTML = '';
   document.getElementById('next-round-btn-container').innerHTML = '';
   
+  document.getElementById('clue-submit-btn').disabled = false;
   document.getElementById('answer-input-card').style.display = 'none';
   document.getElementById('answer-waiting-card').style.display = 'block';
   
@@ -713,6 +683,7 @@ socket.on('nextTurnIndex', ({ activePlayerId, activePlayerName }) => {
   const banner = document.getElementById('active-turn-banner');
   if (activePlayerId === state.playerId) {
     banner.textContent = "⭐️ YOUR TURN TO TRANSMIT A CLUE WORD! ⭐️";
+    document.getElementById('clue-submit-btn').disabled = false;
     document.getElementById('answer-input-card').style.display = 'block';
     document.getElementById('answer-waiting-card').style.display = 'block';
   } else {
@@ -782,6 +753,7 @@ socket.on('continueStatusUpdated', (votesMap) => {
 socket.on('goToVoteScreen', (room) => {
   state.phase = 'vote';
   state.selectedVote = null;
+  document.getElementById('submit-vote-btn').disabled = true;
   
   let html = '';
   Object.keys(room.answers).forEach(r => {
@@ -861,17 +833,34 @@ socket.on('goToResultScreen', (room) => {
     revealZone.innerHTML = '';
   }
   
-  const tally = room.voteTally || {};
-  const maxVotes = Math.max(...Object.values(tally), 1);
-  
+  // Custom Render for Multi-place Elimination Tracking / Results
   const finalVoteEl = document.getElementById('final-vote-results');
-  finalVoteEl.innerHTML = state.players.sort((a,b) => (tally[b.id]||0) - (tally[a.id]||0)).map(p => `
-    <div class="vote-bar">
-      <div style="min-width:110px; font-size:0.85rem;">${p.name} ${(room.roles && room.roles[p.id]==='imposter' && !room.tieBreakerActive)?'🕵️':''}</div>
-      <div class="vote-bar-track"><div class="vote-bar-fill" style="width:${((tally[p.id]||0)/maxVotes)*100}%"></div></div>
-      <div style="font-size:0.85rem; font-weight:700;">${tally[p.id]||0}</div>
-    </div>
-  `).join('');
+  if(room.standingsList && room.standingsList.length > 0) {
+    // If running in Seven of Clubs mode, show actual placement standings order
+    finalVoteEl.innerHTML = room.standingsList.map((entry, index) => `
+      <div class="vote-bar" style="border: 1px solid rgba(139,92,246,0.3)">
+        <div style="min-width:140px; font-size:0.85rem; font-weight:700; color:var(--accent2)">
+          RANK #${index + 1}: ${entry.name}
+        </div>
+        <div class="vote-bar-track">
+          <div class="vote-bar-fill" style="width: ${100 - (index * (100 / room.standingsList.length))}%"></div>
+        </div>
+        <div style="font-size:0.8rem; color:var(--text-dim);">Hand size: 0</div>
+      </div>
+    `).join('');
+  } else {
+    // Standard Imposter Mode vote visualizer
+    const tally = room.voteTally || {};
+    const maxVotes = Math.max(...Object.values(tally), 1);
+    finalVoteEl.innerHTML = state.players.sort((a,b) => (tally[b.id]||0) - (tally[a.id]||0)).map(p => `
+      <div class="vote-bar">
+        <div style="min-width:110px; font-size:0.85rem;">${p.name} ${(room.roles && room.roles[p.id]==='imposter' && !room.tieBreakerActive)?'🕵️':''}</div>
+        <div class="vote-bar-track"><div class="vote-bar-fill" style="width:${((tally[p.id]||0)/maxVotes)*100}%"></div></div>
+        <div style="font-size:0.85rem; font-weight:700;">${tally[p.id]||0}</div>
+      </div>
+    `).join('');
+  }
+  
   document.getElementById('host-result-controls').style.display = state.isHost ? 'block' : 'none';
   showScreen('result');
 });
