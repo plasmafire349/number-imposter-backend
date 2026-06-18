@@ -9,9 +9,9 @@ const io = new Server(server);
 
 const PORT = process.env.PORT || 3000;
 
-// Explicitly route to home page serving 4.txt
+// FIXED: Routing directly to your correct HTML file name
 app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, '4.txt'));
+  res.sendFile(path.join(__dirname, 'number-imposter.html'));
 });
 
 // Master state tracking object for active rooms
@@ -40,7 +40,7 @@ function createShuffledDeck() {
   return deck;
 }
 
-// FIXED: Corrected matrix path arithmetic for Seven of Clubs
+// Matrix path arithmetic for Seven of Clubs
 function isCardPlayable(card, boardState) {
   const suitState = boardState[card.suit];
   
@@ -49,7 +49,7 @@ function isCardPlayable(card, boardState) {
   
   const rankIdx = RANKS.indexOf(card.rank);
   
-  // Downward path towards Ace (Index 6 is rank '7')
+  // Downward path towards Ace
   if (rankIdx < 6) {
     return rankIdx === suitState.lowestPlaced - 1;
   }
@@ -150,9 +150,8 @@ io.on('connection', (socket) => {
       room.failedImposterGuess = null;
       room.gameOverReason = '';
 
-      // FIXED: Handled specific setup configuration for RJ Variant vs Number mode
       if (room.gameMode === 'rj') {
-        room.theNumber = "SPECTRUM"; // Custom target objective string placeholder
+        room.theNumber = "SPECTRUM"; 
       } else {
         room.theNumber = Math.floor(Math.random() * 10) + 1;
       }
@@ -288,7 +287,6 @@ io.on('connection', (socket) => {
     const room = rooms[roomCode];
     if (!room || room.roles[socket.id] !== 'imposter') return;
 
-    // Direct configuration match checking regardless of string/numeric data inputs
     if (String(guessedNumber).toUpperCase() === String(room.theNumber).toUpperCase()) {
       room.gameOverReason = "💥 Imposter guessed the Target Code accurately! Imposter Victory! 💥";
     } else {
