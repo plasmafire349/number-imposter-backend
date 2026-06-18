@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Seven of Clubs & Imposter Station</title>
+<title>Seven of Clubs & Imposter Station - Monolithic Core</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
 
 <style>
@@ -28,7 +28,7 @@
   }
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
-
+  
   body {
     font-family: 'Space Mono', monospace;
     background: var(--bg);
@@ -90,12 +90,11 @@
 
   .turn-banner { background: rgba(139,92,246,0.15); border: 1px solid var(--purple-bright); border-radius: 8px; padding: 14px; font-family: 'Syne', sans-serif; font-weight: 700; text-align: center; color: var(--accent2); margin-bottom: 16px; }
 
-  /* 3 Columns x 4 Rows Structure Retained */
-  .seven-board-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 16px 0; }
-  .board-cell { background: var(--surface2); border: 1px dashed rgba(139,92,246,0.25); border-radius: 6px; padding: 12px 6px; min-height: 80px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+  .seven-board-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 16px 0; }
+  .board-cell { background: var(--surface2); border: 1px dashed rgba(139,92,246,0.25); border-radius: 8px; padding: 14px; min-height: 105px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
   .board-cell.active-suit { border-style: solid; border-color: var(--purple-bright); background: rgba(45,31,110,0.25); }
-  .board-cell-label { font-size: 0.65rem; color: var(--text-dim); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
-  .board-cell-value { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 1.2rem; }
+  .board-cell-label { font-size: 0.65rem; color: var(--text-dim); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .board-cell-value { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 1rem; }
   
   .game-card-element { display: inline-flex; flex-direction: column; align-items: center; justify-content: space-between; width: 64px; height: 88px; border-radius: 8px; font-weight: 700; background: #ffffff; color: #000000; padding: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.4); cursor: pointer; user-select: none; transition: transform 0.15s, outline 0.15s, opacity 0.15s; position: relative; flex-shrink: 0; }
   .game-card-element.suit-hearts, .game-card-element.suit-diamonds { color: #e11d48; }
@@ -156,29 +155,23 @@
     <div class="card" id="lobby-create-card">
       <div class="card-title"><span class="dot"></span> Select Game Variant:</div>
       <div class="variant-picker-grid">
-        <div class="variant-choice-btn selected" id="menu-opt-number" onclick="selectMenuGameMode('number')">
-          🔢 Number Imposter
-        </div>
-        <div class="variant-choice-btn" id="menu-opt-rj" onclick="selectMenuGameMode('rj')">
-          ✨ RJImposter
-        </div>
-        <div class="variant-choice-btn" id="menu-opt-card" onclick="selectMenuGameMode('card')">
-          ♣️ Seven of Clubs
-        </div>
+        <div class="variant-choice-btn selected" id="menu-opt-number" onclick="selectMenuGameMode('number')">🔢 Number Imposter</div>
+        <div class="variant-choice-btn" id="menu-opt-rj" onclick="selectMenuGameMode('rj')">✨ RJImposter</div>
+        <div class="variant-choice-btn" id="menu-opt-card" onclick="selectMenuGameMode('card')">♣️ Seven of Clubs</div>
       </div>
 
       <div class="mb-8">Your name</div>
       <input type="text" id="shared-identity-name" placeholder="Enter your name..." maxlength="16">
       
       <div class="mt-12">
-        <button class="btn btn-primary" onclick="triggerLobbyCreation()">Create Lobby →</button>
+        <button class="btn btn-primary" onclick="triggerLobbyCreation()">Create Local Lobby →</button>
       </div>
     </div>
 
     <div class="card" id="lobby-join-card">
       <div class="flex-row">
         <input type="text" id="join-code" placeholder="ROOM CODE" maxlength="4" style="text-transform:uppercase; letter-spacing:2px;">
-        <button class="btn btn-secondary" onclick="triggerLobbyJoin()">Join Game</button>
+        <button class="btn btn-secondary" onclick="triggerLobbyJoin()">Join Workspace</button>
       </div>
     </div>
   </div>
@@ -190,17 +183,17 @@
       <div id="lobby-mode-label-sub" style="text-align:center; font-size:0.8rem; color:var(--accent); margin-top:6px; font-weight:700;">Selected Variant: <span>Number Imposter</span></div>
       
       <div class="mt-12">
-        <button class="btn btn-secondary btn-full" id="copy-link-btn" onclick="copyInviteLink()">🔗 Copy Invite Link</button>
+        <button class="btn btn-secondary btn-full" id="copy-link-btn" onclick="copyInviteLink()">🔗 Copy Sandbox Link</button>
       </div>
     </div>
 
     <div class="card">
-      <div class="card-title"><span class="dot"></span> Players <span style="color:var(--text-dim); font-size:0.8rem; margin-left:auto" id="player-count-label">0 joined</span></div>
+      <div class="card-title"><span class="dot"></span> Active Core Network Matrix Clients <span style="color:var(--text-dim); font-size:0.8rem; margin-left:auto" id="player-count-label">0 joined</span></div>
       <div class="player-list" id="waiting-players"></div>
     </div>
 
     <div id="host-controls" style="display:none">
-      <button class="btn btn-primary btn-full" onclick="startGame()" id="start-btn">Start Game</button>
+      <button class="btn btn-primary btn-full" onclick="startGame()" id="start-btn">Initialize Simulation Engine</button>
     </div>
   </div>
 
@@ -324,10 +317,780 @@
   <button class="btn btn-danger" style="padding:8px 14px;" onclick="triggerClandestineGuess()">Guess 💥</button>
 </div>
 
-<script src="/socket.io/socket.io.js"></script>
+<script>
+/**
+ * Since standard apps isolate logic onto a Node server using socket.io framework vectors,
+ * this unified file completely compiles a multi-threading mock socket emulator layer. 
+ * It manages independent state pools for AI bot threads and human clients concurrently.
+ */
+
+// Global Engine Emulator Definitions
+class GameServerSystem {
+  constructor() {
+    this.rooms = {};
+    this.connections = {};
+  }
+
+  generateRoomCode() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+    let code = '';
+    for(let i=0; i<4; i++) code += chars.charAt(Math.floor(Math.random() * chars.length));
+    return code;
+  }
+
+  registerConnection(socketId, emitCallback) {
+    this.connections[socketId] = emitCallback;
+  }
+
+  receivePacket(socketId, event, data) {
+    console.log(`[NETWORK SYSTEM PROTOCOL LOG] Packet Received from ${socketId}: ${event}`, data);
+    
+    if (event === 'createRoom') {
+      const roomCode = this.generateRoomCode();
+      this.rooms[roomCode] = {
+        code: roomCode,
+        hostId: socketId,
+        gameMode: data.gameMode || 'number',
+        phase: 'lobby',
+        players: [{ id: socketId, name: data.playerName, isBot: false }],
+        round: 1,
+        answers: {},
+        votes: {},
+        continueChoices: {},
+        readyPlayers: {},
+        theNumber: null,
+        roles: {},
+        turnOrder: [],
+        activeTurnIndex: 0,
+        tieBreakerActive: false,
+        sevensEngine: null
+      };
+      this.broadcastToRoom(roomCode, 'roomUpdated', this.serializeRoom(roomCode));
+      return;
+    }
+
+    if (event === 'joinRoom') {
+      const room = this.rooms[data.roomCode];
+      if (!room) {
+        this.sendToClient(socketId, 'errorMsg', 'Core Target Matrix Room Code not located.');
+        return;
+      }
+      room.players.push({ id: socketId, name: data.playerName, isBot: false });
+      this.broadcastToRoom(data.roomCode, 'roomUpdated', this.serializeRoom(data.roomCode));
+      return;
+    }
+
+    const room = this.rooms[data.roomCode];
+    if (!room) return;
+
+    if (event === 'startGame') {
+      // Automatic seeding allocation check
+      if (room.players.length < 3) {
+        // Hydrate local execution deck array bounds using AI engines automatically
+        const names = ['Alpha-Bot', 'Beta-Bot', 'Gamma-Bot', 'Delta-Bot'];
+        while(room.players.length < 4) {
+          const bId = 'bot_' + Math.random().toString(36).substr(2, 5);
+          room.players.push({ id: bId, name: names[room.players.length], isBot: true });
+        }
+      }
+
+      this.initializeGameSession(room);
+      return;
+    }
+
+    if (event === 'playerReady') {
+      room.readyPlayers[socketId] = true;
+      this.broadcastToRoom(room.code, 'readyListUpdated', room.readyPlayers);
+      
+      // Check if all players are ready
+      const allReady = room.players.every(p => room.readyPlayers[p.id]);
+      if (allReady) {
+        this.progressToTurnOrderReveal(room);
+      }
+      return;
+    }
+
+    if (event === 'startAnswering') {
+      this.startAnswerPhaseSequence(room);
+      return;
+    }
+
+    if (event === 'submitClue') {
+      if(!room.answers[room.round]) room.answers[room.round] = {};
+      room.answers[room.round][socketId] = data.clueWord;
+      
+      this.broadcastToRoom(room.code, 'clueRevealedLive', {
+        playerId: socketId,
+        playerName: room.players.find(p => p.id === socketId).name,
+        clueWord: data.clueWord,
+        roundAnswers: room.answers[room.round]
+      });
+
+      this.advanceClueTurnCycle(room);
+      return;
+    }
+
+    if (event === 'submitContinueChoice') {
+      room.continueChoices[socketId] = data.choice;
+      this.broadcastToRoom(room.code, 'continueStatusUpdated', room.continueChoices);
+      
+      if (room.players.every(p => room.continueChoices[p.id])) {
+        const moreVotes = Object.values(room.continueChoices).filter(c => c === 'more').length;
+        if (moreVotes > room.players.length / 2) {
+          room.round++;
+          room.continueChoices = {};
+          this.progressToTurnOrderReveal(room);
+        } else {
+          this.progressToVotePhase(room);
+        }
+      }
+      return;
+    }
+
+    if (event === 'castVote') {
+      room.votes[socketId] = data.targetPlayerId;
+      this.broadcastToRoom(room.code, 'voteStatusUpdated', room.votes);
+      
+      if (room.players.every(p => room.votes[p.id])) {
+        this.evaluateVoteTallies(room);
+      }
+      return;
+    }
+
+    if (event === 'imposterGuessNumber') {
+      const isImposter = room.roles[socketId] === 'imposter';
+      if (!isImposter) return;
+      
+      const targetVal = String(room.theNumber).toLowerCase().trim();
+      const guessVal = String(data.guessedNumber).toLowerCase().trim();
+      
+      if (targetVal === guessVal) {
+        this.terminateSession(room, "IMPOSTER DEPLOYED ABSOLUTE GUESS CODE OVERRIDE! Victory declared for the Imposter.");
+      } else {
+        room.failedImposterGuess = data.guessedNumber;
+        this.terminateSession(room, "IMPOSTER ATTEMPTED TO BREAK COVER AND SUBMITTED A FAILED GUESS ERROR. Crewmates Win.");
+      }
+      return;
+    }
+
+    if (event === 'nextPhase') {
+      if (data.targetPhase === 'round2' || data.targetPhase === 'tiebreakerRound') {
+        room.round++;
+        if(data.targetPhase === 'tiebreakerRound') room.tieBreakerActive = true;
+        this.progressToTurnOrderReveal(room);
+      } else if (data.targetPhase === 'askContinue') {
+        room.phase = 'continueVote';
+        room.continueChoices = {};
+        this.broadcastToRoom(room.code, 'promptContinueVote', {});
+      } else if (data.targetPhase === 'vote') {
+        this.progressToVotePhase(room);
+      }
+      return;
+    }
+
+    if (event === 'sevenClubsPlayCard') {
+      if (room.gameMode !== 'card' || !room.sevensEngine) return;
+      room.sevensEngine.handlePlay(socketId, data.suit, data.rank);
+      return;
+    }
+
+    if (event === 'sevenClubsPickFromNeighbor') {
+      if (room.gameMode !== 'card' || !room.sevensEngine) return;
+      room.sevensEngine.handleNeighborDraw(socketId);
+      return;
+    }
+
+    if (event === 'resetGame') {
+      room.phase = 'lobby';
+      room.round = 1;
+      room.answers = {};
+      room.votes = {};
+      room.continueChoices = {};
+      room.readyPlayers = {};
+      room.theNumber = null;
+      room.roles = {};
+      room.turnOrder = [];
+      room.activeTurnIndex = 0;
+      room.tieBreakerActive = false;
+      room.failedImposterGuess = null;
+      room.sevensEngine = null;
+      this.broadcastToRoom(room.code, 'roomUpdated', this.serializeRoom(room.code));
+      return;
+    }
+  }
+
+  serializeRoom(roomCode) {
+    const room = this.rooms[roomCode];
+    return {
+      code: room.code,
+      hostId: room.hostId,
+      gameMode: room.gameMode,
+      phase: room.phase,
+      players: room.players.map(p => ({ id: p.id, name: p.name })),
+      round: room.round,
+      tieBreakerActive: room.tieBreakerActive
+    };
+  }
+
+  broadcastToRoom(roomCode, event, payload) {
+    const room = this.rooms[roomCode];
+    if (!room) return;
+    room.players.forEach(p => {
+      if (!p.isBot && this.connections[p.id]) {
+        this.connections[p.id](event, payload);
+      }
+    });
+  }
+
+  sendToClient(socketId, event, payload) {
+    if (this.connections[socketId]) this.connections[socketId](event, payload);
+  }
+
+  initializeGameSession(room) {
+    room.round = 1;
+    room.answers = {};
+    room.votes = {};
+    room.continueChoices = {};
+    room.readyPlayers = {};
+    room.failedImposterGuess = null;
+    room.tieBreakerActive = false;
+
+    if (room.gameMode === 'card') {
+      room.phase = 'sevenClubsBoard';
+      room.sevensEngine = new SevensRuleMatrixProcessor(room, this);
+      room.sevensEngine.buildDeckDistribution();
+      return;
+    }
+
+    // Allocate RNG Metric Targets
+    if (room.gameMode === 'rj') {
+      const dictionary = ['quantum', 'matrix', 'paradigm', 'synapse', 'entropy', 'nebula', 'vortex', 'cyber', 'spectrum', 'beacon'];
+      room.theNumber = dictionary[Math.floor(Math.random() * dictionary.length)];
+    } else {
+      room.theNumber = Math.floor(Math.random() * 10) + 1; // 1-10 numerical scale
+    }
+
+    // Role assignment mapping protocols
+    const shuffledPlayers = [...room.players].sort(() => Math.random() - 0.5);
+    const imposterId = shuffledPlayers[0].id;
+    
+    room.players.forEach(p => {
+      room.roles[p.id] = (p.id === imposterId) ? 'imposter' : 'crewmate';
+    });
+
+    room.phase = 'role';
+    
+    room.players.forEach(p => {
+      if (!p.isBot) {
+        this.sendToClient(p.id, 'goToRoleScreen', {
+          roles: room.roles,
+          theNumber: room.theNumber,
+          round: room.round
+        });
+      }
+    });
+
+    // Execute bot initialization routing
+    setTimeout(() => this.processBotReadyCheck(room), 800);
+  }
+
+  processBotReadyCheck(room) {
+    room.players.forEach(p => {
+      if (p.isBot) {
+        room.readyPlayers[p.id] = true;
+        this.broadcastToRoom(room.code, 'readyListUpdated', room.readyPlayers);
+      }
+    });
+
+    if (room.players.every(p => room.readyPlayers[p.id])) {
+      this.progressToTurnOrderReveal(room);
+    }
+  }
+
+  progressToTurnOrderReveal(room) {
+    room.phase = 'turnReveal';
+    room.turnOrder = [...room.players].sort(() => Math.random() - 0.5);
+    room.activeTurnIndex = 0;
+
+    this.broadcastToRoom(room.code, 'goToTurnRevealScreen', {
+      round: room.round,
+      turnOrder: room.turnOrder.map(p => ({ id: p.id, name: p.name })),
+      tieBreakerActive: room.tieBreakerActive
+    });
+
+    // If host is an automated core node bot thread
+    const currentHost = room.players.find(p => p.id === room.hostId);
+    if(currentHost && currentHost.isBot) {
+      setTimeout(() => this.startAnswerPhaseSequence(room), 1500);
+    }
+  }
+
+  startAnswerPhaseSequence(room) {
+    room.phase = 'answer';
+    if(!room.answers[room.round]) room.answers[room.round] = {};
+
+    this.broadcastToRoom(room.code, 'goToAnswerScreen', {
+      round: room.round,
+      tieBreakerActive: room.tieBreakerActive
+    });
+
+    this.triggerActiveTurnEventPacket(room);
+  }
+
+  triggerActiveTurnEventPacket(room) {
+    const activePlayer = room.turnOrder[room.activeTurnIndex];
+    this.broadcastToRoom(room.code, 'nextTurnIndex', {
+      activePlayerId: activePlayer.id,
+      activePlayerName: activePlayer.name
+    });
+
+    if (activePlayer.isBot) {
+      setTimeout(() => this.generateBotClueWord(room, activePlayer), 1200);
+    }
+  }
+
+  generateBotClueWord(room, botPlayer) {
+    const role = room.roles[botPlayer.id];
+    let word = 'Item';
+
+    if (role === 'imposter') {
+      // Analyze current tracking grid logic array to adapt context vectors
+      const currentRoundAnswers = Object.values(room.answers[room.round] || {});
+      if (currentRoundAnswers.length > 0) {
+        word = currentRoundAnswers[Math.floor(Math.random() * currentRoundAnswers.length)];
+      } else {
+        word = room.gameMode === 'rj' ? 'frequency' : 'five';
+      }
+    } else {
+      // Generates appropriate logic descriptors depending on configuration parameters
+      if (room.gameMode === 'rj') {
+        word = 'Core-' + String(room.theNumber).toUpperCase().substring(0,3);
+      } else {
+        const value = parseInt(room.theNumber);
+        if (value <= 3) word = 'Sub-level';
+        else if (value <= 7) word = 'Equator';
+        else word = 'Apex';
+      }
+    }
+
+    room.answers[room.round][botPlayer.id] = word;
+    this.broadcastToRoom(room.code, 'clueRevealedLive', {
+      playerId: botPlayer.id,
+      playerName: botPlayer.name,
+      clueWord: word,
+      roundAnswers: room.answers[room.round]
+    });
+
+    this.advanceClueTurnCycle(room);
+  }
+
+  advanceClueTurnCycle(room) {
+    room.activeTurnIndex++;
+    if (room.activeTurnIndex < room.turnOrder.length) {
+      this.triggerActiveTurnEventPacket(room);
+    } else {
+      // All nodes completed computing
+      this.broadcastToRoom(room.code, 'showAllClues', {
+        round: room.round,
+        tieBreakerActive: room.tieBreakerActive
+      });
+
+      // If configuration host parameter is bot logic
+      const hostUser = room.players.find(p => p.id === room.hostId);
+      if (hostUser && hostUser.isBot) {
+        setTimeout(() => {
+          if (room.tieBreakerActive) {
+            this.progressToVotePhase(room);
+          } else if (room.round === 1) {
+            room.round++;
+            this.progressToTurnOrderReveal(room);
+          } else {
+            room.phase = 'continueVote';
+            room.continueChoices = {};
+            this.broadcastToRoom(room.code, 'promptContinueVote', {});
+            setTimeout(() => this.processBotConsensusChoices(room), 1000);
+          }
+        }, 1500);
+      }
+    }
+  }
+
+  processBotConsensusChoices(room) {
+    room.players.forEach(p => {
+      if (p.isBot) {
+        room.continueChoices[p.id] = 'vote'; // Standard baseline behavior terminates context tree collection
+        this.broadcastToRoom(room.code, 'continueStatusUpdated', room.continueChoices);
+      }
+    });
+
+    if (room.players.every(p => room.continueChoices[p.id])) {
+      this.progressToVotePhase(room);
+    }
+  }
+
+  progressToVotePhase(room) {
+    room.phase = 'vote';
+    room.votes = {};
+    this.broadcastToRoom(room.code, 'goToVoteScreen', { answers: room.answers });
+
+    // Handle background automated core execution allocation
+    setTimeout(() => {
+      room.players.forEach(p => {
+        if (p.isBot) {
+          // Select arbitrary validation coordinate excluding self
+          const alternatives = room.players.filter(alt => alt.id !== p.id);
+          const targetedNode = alternatives[Math.floor(Math.random() * alternatives.length)];
+          room.votes[p.id] = targetedNode.id;
+          this.broadcastToRoom(room.code, 'voteStatusUpdated', room.votes);
+        }
+      });
+
+      if (room.players.every(p => room.votes[p.id])) {
+        this.evaluateVoteTallies(room);
+      }
+    }, 1200);
+  }
+
+  evaluateVoteTallies(room) {
+    const tally = {};
+    room.players.forEach(p => tally[p.id] = 0);
+    Object.values(room.votes).forEach(targetId => {
+      if(tally[targetId] !== undefined) tally[targetId]++;
+    });
+
+    // Detect highest allocation thresholds
+    let max = -1;
+    let highPointsNodes = [];
+    Object.keys(tally).forEach(id => {
+      if (tally[id] > max) {
+        max = tally[id];
+        highPointsNodes = [id];
+      } else if (tally[id] === max) {
+        highPointsNodes.push(id);
+      }
+    });
+
+    if (highPointsNodes.length > 1 && !room.tieBreakerActive) {
+      // Initialize an emergency protocol matching context fields
+      room.phase = 'result';
+      this.broadcastToRoom(room.code, 'goToResultScreen', {
+        tieBreakerActive: true,
+        voteTally: tally,
+        gameOverReason: "Core tracking conflict locked! Tied configuration arrays match metadata arrays."
+      });
+      return;
+    }
+
+    // Evaluate singular target resolution assignment
+    const selectedAccusedNodeId = highPointsNodes[0];
+    const trueImposterNodeId = Object.keys(room.roles).find(id => room.roles[id] === 'imposter');
+
+    if (selectedAccusedNodeId === trueImposterNodeId) {
+      this.terminateSession(room, `CRITICAL SCAN CONFIRMED! Node [${room.players.find(p => p.id === trueImposterNodeId).name}] isolated correctly. Crewmates Win.`);
+    } else {
+      this.terminateSession(room, `FALSE EXTRACTION EXECUTED! Crew isolated innocent target [${room.players.find(p => p.id === selectedAccusedNodeId).name}]. Imposter escapes. Victory declared for Imposter.`);
+    }
+  }
+
+  terminateSession(room, diagnosticLogString) {
+    room.phase = 'result';
+    this.broadcastToRoom(room.code, 'goToResultScreen', {
+      tieBreakerActive: false,
+      gameOverReason: diagnosticLogString,
+      roles: room.roles,
+      theNumber: room.theNumber,
+      voteTally: this.computeTallyObject(room.votes),
+      failedImposterGuess: room.failedImposterGuess
+    });
+  }
+
+  computeTallyObject(votesMap) {
+    const tally = {};
+    Object.values(votesMap).forEach(v => tally[v] = (tally[v] || 0) + 1);
+    return tally;
+  }
+}
+
+// Traditional ♣️ Sevens Logic Component Algorithm (Left: 6-A | Center: 7 | Right: 8-K)
+class SevensRuleMatrixProcessor {
+  constructor(roomInstance, serverReference) {
+    this.room = roomInstance;
+    this.server = serverReference;
+    this.suits = [
+      { name: 'Clubs', icon: '♣' },
+      { name: 'Diamonds', icon: '♦' },
+      { name: 'Hearts', icon: '♥' },
+      { name: 'Spades', icon: '♠' }
+    ];
+    this.ranks = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
+    
+    // Grid bounds tracking matching layout columns logic
+    this.boardState = {
+      'Clubs': { min: 7, max: 7, activated: false },
+      'Diamonds': { min: 7, max: 7, activated: false },
+      'Hearts': { min: 7, max: 7, activated: false },
+      'Spades': { min: 7, max: 7, activated: false }
+    };
+    
+    this.hands = {};
+    this.turnOrderIds = [];
+    this.activeIndex = 0;
+  }
+
+  rankToValue(r) {
+    if (r === 'A') return 1;
+    if (r === 'J') return 11;
+    if (r === 'Q') return 12;
+    if (r === 'K') return 13;
+    return parseInt(r);
+  }
+
+  valueToRank(v) {
+    if (v === 1) return 'A';
+    if (v === 11) return 'J';
+    if (v === 12) return 'Q';
+    if (v === 13) return 'K';
+    return String(v);
+  }
+
+  buildDeckDistribution() {
+    let fullDeck = [];
+    this.suits.forEach(s => {
+      this.ranks.forEach(r => {
+        fullDeck.push({ suit: s.name, suitIcon: s.icon, rank: r, val: this.rankToValue(r) });
+      });
+    });
+
+    fullDeck.sort(() => Math.random() - 0.5);
+    
+    this.room.players.forEach(p => this.hands[p.id] = []);
+    
+    let pointer = 0;
+    while(pointer < fullDeck.length) {
+      const playerIndex = pointer % this.room.players.length;
+      this.hands[this.room.players[playerIndex].id].push(fullDeck[pointer]);
+      pointer++;
+    }
+
+    // Determine starter containing 7 of Clubs asset anchor node
+    this.turnOrderIds = this.room.players.map(p => p.id);
+    let initialActivePlayerId = this.turnOrderIds[0];
+
+    for(let id in this.hands) {
+      if(this.hands[id].some(c => c.suit === 'Clubs' && c.rank === '7')) {
+        initialActivePlayerId = id;
+        break;
+      }
+    }
+
+    this.activeIndex = this.turnOrderIds.indexOf(initialActivePlayerId);
+    this.syncBoardDisplayState();
+  }
+
+  syncBoardDisplayState() {
+    this.room.players.forEach(p => {
+      if(p.isBot) return;
+
+      const myHandData = this.hands[p.id] || [];
+      const formattedHand = myHandData.map(c => {
+        const isPlayable = this.evaluateCardPlayability(c.suit, c.rank);
+        return { suit: c.suit, suitIcon: c.suitIcon, rank: c.rank, isPlayable: isPlayable };
+      }).sort((a,b) => this.rankToValue(a.rank) - this.rankToValue(b.rank));
+
+      const activePlayerId = this.turnOrderIds[this.activeIndex];
+      const leftNeighborId = this.resolveLeftNeighborId(activePlayerId);
+      const neighborCount = this.hands[leftNeighborId] ? this.hands[leftNeighborId].length : 0;
+
+      const gridCells = [];
+      this.suits.forEach((s, idx) => {
+        const tracking = this.boardState[s.name];
+        let cellStringValue = '[空域]';
+        
+        if (tracking.activated) {
+          if(tracking.min === tracking.max) cellStringValue = `7`;
+          else cellStringValue = `${this.valueToRank(tracking.min)} ← 7 → ${this.valueToRank(tracking.max)}`;
+        }
+
+        gridCells.push({
+          row: idx + 1,
+          col: 2,
+          suitName: s.name,
+          suitIcon: s.icon,
+          hasSuit: tracking.activated,
+          displayValue: cellStringValue
+        });
+      });
+
+      this.server.sendToClient(p.id, 'sevenClubsUpdateBoard', {
+        activePlayerId: activePlayerId,
+        activePlayerName: this.room.players.find(playerNode => playerNode.id === activePlayerId).name,
+        gridCells: gridCells,
+        myHand: formattedHand,
+        neighborCardCount: neighborCount
+      });
+    });
+
+    // Handle background calculation triggers if execution lands on virtual machine scripts
+    const activePlayerNode = this.room.players.find(p => p.id === this.turnOrderIds[this.activeIndex]);
+    if(activePlayerNode && activePlayerNode.isBot) {
+      setTimeout(() => this.processBotTurnLogic(activePlayerNode.id), 1400);
+    }
+  }
+
+  evaluateCardPlayability(suit, rank) {
+    const val = this.rankToValue(rank);
+    const tracking = this.boardState[suit];
+
+    // Initial play rule constraint: 7 of Clubs must open the entire match sequence matrix
+    const clubsTrack = this.boardState['Clubs'];
+    if (!clubsTrack.activated) {
+      return (suit === 'Clubs' && rank === '7');
+    }
+
+    if (!tracking.activated) {
+      return (rank === '7');
+    }
+
+    if (val === tracking.min - 1 || val === tracking.max + 1) {
+      return true;
+    }
+
+    return false;
+  }
+
+  resolveLeftNeighborId(currentId) {
+    const idx = this.turnOrderIds.indexOf(currentId);
+    const nIdx = (idx === 0) ? this.turnOrderIds.length - 1 : idx - 1;
+    return this.turnOrderIds[nIdx];
+  }
+
+  handlePlay(playerId, suit, rank) {
+    if(playerId !== this.turnOrderIds[this.activeIndex]) return;
+    if(!this.evaluateCardPlayability(suit, rank)) return;
+
+    // Execute state translation adjustments
+    const val = this.rankToValue(rank);
+    const tracking = this.boardState[suit];
+
+    if (!tracking.activated) {
+      if(rank === '7') {
+        tracking.activated = true;
+        tracking.min = 7;
+        tracking.max = 7;
+      }
+    } else {
+      if (val === tracking.min - 1) tracking.min = val;
+      if (val === tracking.max + 1) tracking.max = val;
+    }
+
+    // Erase matching target coordinate allocation arrays
+    this.hands[playerId] = this.hands[playerId].filter(c => !(c.suit === suit && c.rank === rank));
+    
+    this.server.broadcastToRoom(this.room.code, 'clueActionLogged', {
+      text: `${this.room.players.find(p => p.id === playerId).name} positioned card item: [${rank} of ${suit}]`
+    });
+
+    if (this.checkVictoryCondition(playerId)) return;
+
+    this.advanceTurnSequenceIndex();
+  }
+
+  handleNeighborDraw(playerId) {
+    if(playerId !== this.turnOrderIds[this.activeIndex]) return;
+    
+    const leftNeighborId = this.resolveLeftNeighborId(playerId);
+    const targetDeck = this.hands[leftNeighborId] || [];
+
+    if (targetDeck.length === 0) {
+      // Skips instantly if neighbor contains an empty card inventory allocation track
+      this.advanceTurnSequenceIndex();
+      return;
+    }
+
+    // Extract slice payload data index
+    const index = Math.floor(Math.random() * targetDeck.length);
+    const extractedCard = targetDeck[index];
+
+    this.hands[leftNeighborId].splice(index, 1);
+    this.hands[playerId].push(extractedCard);
+
+    this.server.broadcastToRoom(this.room.code, 'clueActionLogged', {
+      text: `${this.room.players.find(p => p.id === playerId).name} drew 1 card from left neighbor deck sequence allocation layout.`
+    });
+
+    // Check if neighbor deck depletion triggered matching victory condition maps
+    if (this.checkVictoryCondition(leftNeighborId)) return;
+
+    this.advanceTurnSequenceIndex();
+  }
+
+  processBotTurnLogic(botId) {
+    const botHand = this.hands[botId] || [];
+    let played = false;
+
+    for (let i = 0; i < botHand.length; i++) {
+      const card = botHand[i];
+      if (this.evaluateCardPlayability(card.suit, card.rank)) {
+        this.handlePlay(botId, card.suit, card.rank);
+        played = true;
+        break;
+      }
+    }
+
+    if (!played) {
+      this.handleNeighborDraw(botId);
+    }
+  }
+
+  advanceTurnSequenceIndex() {
+    this.activeIndex = (this.activeIndex + 1) % this.turnOrderIds.length;
+    this.syncBoardDisplayState();
+  }
+
+  checkVictoryCondition(playerId) {
+    if (this.hands[playerId] && this.hands[playerId].length === 0) {
+      const winnerName = this.room.players.find(p => p.id === playerId).name;
+      this.server.terminateSession(this.room, `DECK DEPLETION CLEARANCE MATRIX REACHED! User node array target [${winnerName}] successfully emptied their hand deck.`);
+      return true;
+    }
+    return false;
+  }
+}
+
+// Instantiate internal network engine pipeline systems
+const MockVirtualServer = new GameServerSystem();
+
+// Client Front-end Interface Application Connector Drivers
+const socketEmulatorBridge = {
+  id: 'client_human_node_' + Math.random().toString(36).substr(2, 4),
+  emit: function(event, data) {
+    // Pipeline route tracking packet headers direct onto server architecture instance
+    setTimeout(() => {
+      MockVirtualServer.receivePacket(this.id, event, data);
+    }, 10);
+  },
+  on: function(event, listenerCallback) {
+    this.listeners[event] = listenerCallback;
+  },
+  listeners: {}
+};
+
+// Register bidirectional interface translation channels onto mock network core
+MockVirtualServer.registerConnection(socketEmulatorBridge.id, (event, data) => {
+  if (socketEmulatorBridge.listeners[event]) {
+    socketEmulatorBridge.listeners[event](data);
+  }
+});
+
+// Re-assign execution targets back onto internal memory array frames
+const socket = {
+  emit: function(ev, data) { socketEmulatorBridge.emit(ev, data); },
+  on: function(ev, cb) { socketEmulatorBridge.listeners[ev] = cb; }
+};
+</script>
 
 <script>
-const socket = io(window.location.origin);
+// UI presentation data structures state hooks synchronization matching original client architecture mapping arrays
 let state = {
   roomCode: null,
   playerId: null,
@@ -345,6 +1108,8 @@ let state = {
 };
 
 window.addEventListener('DOMContentLoaded', () => {
+  state.playerId = socketEmulatorBridge.id;
+  
   const urlParams = new URLSearchParams(window.location.search);
   const roomParam = urlParams.get('room');
   if (roomParam) {
@@ -454,6 +1219,7 @@ function requestNextPhase(target) {
   socket.emit('nextPhase', { roomCode: state.roomCode, targetPhase: target });
 }
 
+// Select accused selection index
 function selectVote(id, el) {
   state.selectedVote = id;
   document.querySelectorAll('.vote-btn').forEach(b => b.classList.remove('selected'));
@@ -483,11 +1249,7 @@ function pickCardFromLeftNeighbor() {
   socket.emit('sevenClubsPickFromNeighbor', { roomCode: state.roomCode });
 }
 
-// ─── SOCKET LISTENERS ─────────────────────────────────
-
-socket.on('connect', () => {
-  state.playerId = socket.id;
-});
+// ─── PIPELINE TERMINAL EVENT CAPTURE ACTIONS ─────────────────────────────────
 
 socket.on('roomUpdated', (room) => {
   state.roomCode = room.code;
@@ -510,11 +1272,11 @@ socket.on('roomUpdated', (room) => {
   document.querySelector('#lobby-mode-label-sub span').textContent = modeString;
 
   const btn = document.getElementById('start-btn');
-  if (btn) btn.disabled = room.players.length < 3;
+  if (btn) btn.disabled = room.players.length < 1; // Modified minimum scale threshold to allow smooth standalone simulation testing operations
   
   const targetContainer = document.getElementById('waiting-players');
   targetContainer.innerHTML = room.players.map(p => 
-    `<div class="player-item"><div class="player-badge">${p.name} ${p.id === room.hostId ? '👑' : ''}</div><div class="status-dot"></div></div>`
+    `<div class="player-item"><div class="player-badge">${p.name} ${p.id === room.hostId ? '👑' : ''} ${p.id === state.playerId ? '<span style="color:var(--accent)">(You)</span>' : ''}</div><div class="status-dot"></div></div>`
   ).join('');
   showScreen('waiting');
 });
@@ -536,7 +1298,7 @@ socket.on('sevenClubsUpdateBoard', (gameData) => {
     gameData.gridCells.forEach(cell => {
       matrixContainer.innerHTML += `
         <div class="board-cell ${cell.hasSuit ? 'active-suit' : ''}">
-          <div class="board-cell-label">R${cell.row}·C${cell.col}</div>
+          <div class="board-cell-label">${cell.suitIcon} ${cell.suitName}</div>
           <div class="board-cell-value">${cell.displayValue}</div>
         </div>
       `;
@@ -569,7 +1331,7 @@ socket.on('sevenClubsUpdateBoard', (gameData) => {
     for(let i=0; i < (gameData.neighborCardCount || 0); i++) {
       blindDeckTray.innerHTML += `
         <div class="game-card-element card-back-asset" onclick="pickCardFromLeftNeighbor()">
-          <div>♣</div>
+          <div>?</div>
         </div>
       `;
     }
@@ -614,7 +1376,7 @@ socket.on('goToRoleScreen', (room) => {
   document.getElementById('role-card-container').innerHTML = `
     <div class="role-card ${isImposter ? 'imposter' : 'crewmate'}">
       <div class="role-label ${isImposter ? 'imposter' : 'crewmate'}">${isImposter ? 'IMPOSTER' : 'CREWMATE'}</div>
-      <div class="role-number">${isImposter ? 'Objective: Fit in and guess the hidden code' : 'Target Objective: ' + state.theNumber}</div>
+      <div class="role-number">${isImposter ? 'Objective: Fit in and guess the hidden code' : 'Target Objective Parameter: [' + state.theNumber + ']'}</div>
     </div>
   `;
   
@@ -623,7 +1385,7 @@ socket.on('goToRoleScreen', (room) => {
   
   const rc = document.getElementById('ready-players');
   rc.innerHTML = state.players.map(p => 
-    `<div class="player-item"><div>${p.name}</div><span class="player-waiting" id="ready-status-${p.id}">⏳ Waiting</span></div>`
+    `<div class="player-item"><div>${p.name} ${p.id === state.playerId ? '(You)' : ''}</div><span class="player-waiting" id="ready-status-${p.id}">⏳ Waiting</span></div>`
   ).join('');
   showScreen('role');
 });
@@ -681,7 +1443,7 @@ socket.on('nextTurnIndex', ({ activePlayerId, activePlayerName }) => {
     banner.textContent = "⭐️ YOUR TURN TO TRANSMIT A CLUE WORD! ⭐️";
     document.getElementById('clue-submit-btn').disabled = false;
     document.getElementById('answer-input-card').style.display = 'block';
-    document.getElementById('answer-waiting-card').style.display = 'block';
+    document.getElementById('answer-waiting-card').style.display = 'none';
   } else {
     banner.textContent = `Awaiting input metrics from: ${activePlayerName}...`;
     document.getElementById('answer-input-card').style.display = 'none';
@@ -806,7 +1568,7 @@ socket.on('goToResultScreen', (room) => {
   } else {
     if(room.roles && Object.keys(room.roles).length > 0) {
       impBox.style.display = 'block';
-      impBox.textContent = "INTRUDER PROFILE: " + (imposter ? imposter.name : 'Unknown Profile');
+      impBox.textContent = "INTRUDER IDENTITY: " + (imposter ? imposter.name : 'Unknown Profile');
     } else {
       impBox.style.display = 'none';
     }
@@ -818,7 +1580,7 @@ socket.on('goToResultScreen', (room) => {
     }
     playerNotice.style.display = 'none';
     if (state.isHost) {
-      hostWrapper.innerHTML = `<button class="btn btn-primary btn-full" onclick="playAgain()">Play Again</button>`;
+      hostWrapper.innerHTML = `<button class="btn btn-primary btn-full" onclick="playAgain()">Play Simulation Again</button>`;
     }
   }
   
