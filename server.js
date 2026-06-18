@@ -1,56 +1,33 @@
 const express = require('express');
+const http = require('http');
+const { Server } = require('socket.io');
+
 const app = express();
-const http = require('http').createServer(app);
-const io = require('socket.io')(http);
-const path = require('path');
+const server = http.createServer(app);
+const io = new Server(server);
 
-// 1. Serve static assets directly from your root directory
-app.use(express.static(__dirname));
+const PORT = process.env.PORT || 3000;
 
-// 2. Safe Express v5 Fallback Middleware looking at the main folder
-app.use((req, res, next) => {
-  if (req.method === 'GET' && !req.path.includes('.')) {
-    return res.sendFile(path.join(__dirname, 'number-imposter.html'), (err) => {
-      if (err) {
-        console.error("Error delivering main HTML:", err);
-        res.status(404).send("File delivery fault. HTML file missing from root directory.");
-      }
-    });
-  }
-  next();
-});
-
+// Memory storage for live game state rooms
 const rooms = {};
 
-// Helper assets for Seven of Clubs
+// --- DECK UTILITIES FOR SEVEN OF CLUBS ---
 const SUITS = [
-  { name: 'Clubs', icon: '♣️' },
-  { name: 'Diamonds', icon: '♦️' },
-  { name: 'Hearts', icon: '♥️' },
-  { name: 'Spades', icon: '♠️' }
+  { name: 'Clubs', icon: '♣', color: 'black' },
+  { name: 'Spades', icon: '♠', color: 'black' },
+  { name: 'Hearts', icon: '♥', color: 'red' },
+  { name: 'Diamonds', icon: '♦', color: 'red' }
 ];
 const RANKS = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
 
-function generateRoomCode() {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  let code = '';
-  for (let i = 0; i < 4; i++) {
-    code += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return code;
-}
-
-function buildStandardDeck() {
-  let deck = [];
-  SUITS.forEach(s => {
-    RANKS.forEach((r, index) => {
-      deck.push({ suit: s.name, suitIcon: s.icon, rank: r, value: index + 1 });
+function createShuffledDeck() {
+  const deck = [];
+  SUITS.forEach(suit => {
+    RANKS.forEach(rank => {
+      deck.push({ suit: suit.name, suitIcon: suit.icon, rank });
     });
   });
-  return deck;
-}
-
-function shuffleDeck(deck) {
+  // Fisher-Yates Shuffle
   for (let i = deck.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [deck[i], deck[j]] = [deck[j], deck[i]];
@@ -58,353 +35,153 @@ function shuffleDeck(deck) {
   return deck;
 }
 
-function syncSevenClubsState(room) {
-  const activePlayer = room.players[room.sevenState.activeIndex];
-
-  // Compile a list of how many cards every player has left
-  const playerCardCounts = room.players.map(p => {
-    return {
-      name: p.name,
-      id: p.id,
-      count: (room.sevenState.hands[p.id] || []).length
-    };
-  });
-
-  room.players.forEach((p) => {
-    const hand = room.sevenState.hands[p.id] || [];
-    
-    const formattedHand = hand.map(card => {
-      let isPlayable = false;
-      const suitTrack = room.sevenState.board[card.suit];
-
-      if (card.rank === '7') {
-        isPlayable = true;
-      } else if (suitTrack.placed) {
-        if (card.value === suitTrack.min - 1 || card.value === suitTrack.max + 1) {
-          isPlayable = true;
-        }
-      }
-      return { ...card, isPlayable };
-    });
-
-    const hasNoMoves = !formattedHand.some(c => c.isPlayable);
-
-    // Build the 3x4 layout matrix displaying real card values instead of pure numbers
-    const gridCells = [];
-    let cellIndex = 1;
-    SUITS.forEach(s => {
-      const track = room.sevenState.board[s.name];
-      if (track.placed) {
-        // Left Column: Minimum card placed on this track (if below 7)
-        gridCells.push({ 
-          row: cellIndex, 
-          col: 1, 
-          hasSuit: true, 
-          displayValue: track.min < 7 ? `${RANKS[track.min - 1]} ${s.icon}` : '—' 
-        });
-        // Center Column: The core anchor 7
-        gridCells.push({ 
-          row: cellIndex, 
-          col: 2, 
-          hasSuit: true, 
-          displayValue: `7 ${s.icon}` 
-        });
-        // Right Column: Maximum card placed on this track (if above 7)
-        gridCells.push({ 
-          row: cellIndex, 
-          col: 3, 
-          hasSuit: true, 
-          displayValue: track.max > 7 ? `${RANKS[track.max - 1]} ${s.icon}` : '—' 
-        });
-      } else {
-        gridCells.push({ row: cellIndex, col: 1, hasSuit: false, displayValue: '—' });
-        gridCells.push({ row: cellIndex, col: 2, hasSuit: false, displayValue: `(7 of ${s.name})` });
-        gridCells.push({ row: cellIndex, col: 3, hasSuit: false, displayValue: '—' });
-      }
-      cellIndex++;
-    });
-
-    // Find out how many cards the left neighbor has left
-    let currentIdx = room.players.findIndex(pl => pl.id === p.id);
-    let neighborCardCount = 0;
-    
-    // Cycle around the loop to find the next player who actually has cards left to draw from
-    for (let i = 1; i < room.players.length; i++) {
-      let checkIdx = (currentIdx + i) % room.players.length;
-      let checkPlayer = room.players[checkIdx];
-      let checkHand = room.sevenState.hands[checkPlayer.id] || [];
-      if (checkHand.length > 0) {
-        neighborCardCount = checkHand.length;
-        break;
-      }
-    }
-
-    io.to(p.id).emit('sevenClubsUpdateBoard', {
-      activePlayerId: activePlayer.id,
-      activePlayerName: activePlayer.name,
-      myHand: formattedHand,
-      gridCells: gridCells,
-      hasNoMoves: hasNoMoves,
-      playerCardCounts: playerCardCounts,
-      neighborCardCount: neighborCardCount
-    });
-  });
+// Check matrix placement rules for Seven of Clubs
+function isCardPlayable(card, boardState) {
+  const suitState = boardState[card.suit];
+  
+  // A 7 can always be played to open up its suit row
+  if (card.rank === '7') return true;
+  
+  // If the 7 of this suit hasn't been placed yet, no other rank can be played
+  if (!suitState.hasSeven) return false;
+  
+  const rankIdx = RANKS.indexOf(card.rank);
+  
+  // Check downward path to build towards Ace
+  if (rankIdx < 6) {
+    return suitState.lowestPlaced === rankIdx + 1;
+  }
+  // Check upward path to build towards King
+  if (rankIdx > 6) {
+    return suitState.highestPlaced === rankIdx - 1;
+  }
+  return false;
 }
 
-function processNextSevenClubsTurn(room, lastPlayedRank) {
-  // Check if anyone just ran out of cards and add them to winners if not already there
-  room.players.forEach(p => {
-    const cardsLeft = (room.sevenState.hands[p.id] || []).length;
-    if (cardsLeft === 0 && !room.sevenState.winners.includes(p.name)) {
-      room.sevenState.winners.push(p.name);
-    }
-  });
-
-  // Count how many people still have cards remaining in their hand
-  let activeHandsCount = 0;
-  room.players.forEach(p => {
-    if ((room.sevenState.hands[p.id] || []).length > 0) {
-      activeHandsCount++;
-    }
-  });
-
-  // End Game Terminal condition: If 1 or fewer players have cards left, the game stops
-  if (activeHandsCount <= 1) {
-    room.phase = 'result';
-    
-    // Build a leaderboard sequence listing the winners in order
-    let winReason = "🏆 GAME COMPLETED! Here are the placements:\n";
-    room.sevenState.winners.forEach((name, idx) => {
-      winReason += `${idx + 1}st Place: ${name} | `;
-    });
-    
-    // Add the remaining person holding cards to the bottom of the list
-    room.players.forEach(p => {
-      if (!room.sevenState.winners.includes(p.name)) {
-        winReason += `Last Place: ${p.name}`;
-      }
-    });
-
-    io.to(room.code).emit('goToResultScreen', {
-      gameOverReason: winReason,
-      roles: {},
-      theNumber: null,
-      voteTally: {},
-      tieBreakerActive: false
-    });
-    return;
-  }
-
-  // Bonus Turn Condition: If they played an Ace or a King, and they STILL have cards, they go again
-  if ((lastPlayedRank === 'A' || lastPlayedRank === 'K') && (room.sevenState.hands[room.players[room.sevenState.activeIndex].id] || []).length > 0) {
-    const activePlayer = room.players[room.sevenState.activeIndex];
-    io.to(room.code).emit('gameLogNotice', `⚡ ${activePlayer.name} gets an extra turn for playing a ${lastPlayedRank}!`);
-    syncSevenClubsState(room);
-  } else {
-    // Standard progression: Cycle turn until we land on someone who still holds cards
-    let nextIndex = room.sevenState.activeIndex;
-    do {
-      nextIndex = (nextIndex + 1) % room.players.length;
-    } while ((room.sevenState.hands[room.players[nextIndex].id] || []).length === 0);
-
-    room.sevenState.activeIndex = nextIndex;
-    syncSevenClubsState(room);
-  }
-}
-
-// ─── SOCKET CONNECTION ROUTER ─────────────────────────────────
+// --- CORE SOCKET CONTROLLER ENGINE ---
 io.on('connection', (socket) => {
 
+  // Create customized room instance
   socket.on('createRoom', ({ playerName, gameMode }) => {
-    const roomCode = generateRoomCode();
+    const roomCode = Math.random().toString(36).substring(2, 6).toUpperCase();
+    
     rooms[roomCode] = {
       code: roomCode,
       hostId: socket.id,
       gameMode: gameMode || 'number',
-      players: [{ id: socket.id, name: playerName }],
       phase: 'lobby',
+      players: [{ id: socket.id, name: playerName }],
       round: 1,
       roles: {},
       theNumber: null,
-      readyPlayers: {},
       turnOrder: [],
-      currentTurnIndex: 0,
+      activeIndex: 0,
       answers: {},
       continueVotes: {},
       votes: {},
-      tieBreakerActive: false,
+      readyPlayers: {},
+      failedImposterGuess: null,
+      gameOverReason: '',
       sevenState: null
     };
+
     socket.join(roomCode);
     socket.emit('roomUpdated', rooms[roomCode]);
   });
 
+  // Join existing active instance
   socket.on('joinRoom', ({ roomCode, playerName }) => {
     const room = rooms[roomCode];
     if (!room) {
-      socket.emit('errorMsg', 'Lobby matrix code invalid or missing!');
+      socket.emit('errorMsg', 'Room workspace not found.');
       return;
     }
     if (room.phase !== 'lobby') {
-      socket.emit('errorMsg', 'Deployment currently locked in an active round context.');
+      socket.emit('errorMsg', 'Game session already executed structural components.');
       return;
     }
+
     room.players.push({ id: socket.id, name: playerName });
     socket.join(roomCode);
     io.to(roomCode).emit('roomUpdated', room);
   });
 
+  // Start Phase Router
   socket.on('startGame', ({ roomCode }) => {
     const room = rooms[roomCode];
-    if (!room || socket.id !== room.hostId) return;
+    if (!room || room.hostId !== socket.id) return;
 
     if (room.gameMode === 'card') {
-      let deck = buildStandardDeck();
-      deck = shuffleDeck(deck);
+      // Initialize Seven of Clubs State Framework
+      const deck = createShuffledDeck();
+      const playerCount = room.players.length;
+      const hands = {};
+      
+      room.players.forEach(p => { hands[p.id] = []; });
+      deck.forEach((card, idx) => {
+        const playerObj = room.players[idx % playerCount];
+        hands[playerObj.id].push(card);
+      });
 
+      // Track card positions matrix matching the screen rendering loops
       room.sevenState = {
+        hands: hands,
+        winners: [], // Chronological placement log array for podium parsing
         activeIndex: 0,
-        hands: {},
-        winners: [], // Keeps track of players who finished their cards
         board: {
-          Clubs: { placed: false, min: 7, max: 7 },
-          Diamonds: { placed: false, min: 7, max: 7 },
-          Hearts: { placed: false, min: 7, max: 7 },
-          Spades: { placed: false, min: 7, max: 7 }
+          Clubs: { hasSeven: false, lowestPlaced: 6, highestPlaced: 6 },
+          Spades: { hasSeven: false, lowestPlaced: 6, highestPlaced: 6 },
+          Hearts: { hasSeven: false, lowestPlaced: 6, highestPlaced: 6 },
+          Diamonds: { hasSeven: false, lowestPlaced: 6, highestPlaced: 6 }
         }
       };
 
-      let pIdx = 0;
-      room.players.forEach(p => room.sevenState.hands[p.id] = []);
-      while (deck.length > 0) {
-        const p = room.players[pIdx % room.players.length];
-        room.sevenState.hands[p.id].push(deck.pop());
-        pIdx++;
-      }
-
-      // Establish player holding the exact "7 of Clubs" to begin turn index
-      room.players.forEach((p, index) => {
-        const hand = room.sevenState.hands[p.id];
-        if (hand.some(c => c.suit === 'Clubs' && c.rank === '7')) {
-          room.sevenState.activeIndex = index;
-        }
+      // Set index to player holding 7 of Clubs to kickstart round rules
+      let starterFoundIdx = 0;
+      room.players.forEach((p, pIdx) => {
+        const hasSevenClubs = hands[p.id].some(c => c.suit === 'Clubs' && c.rank === '7');
+        if (hasSevenClubs) starterFoundIdx = pIdx;
       });
-
+      room.sevenState.activeIndex = starterFoundIdx;
       room.phase = 'sevenClubsBoard';
+      
       syncSevenClubsState(room);
-
     } else {
+      // Setup logic for standard Imposter matches
       room.round = 1;
       room.answers = {};
       room.continueVotes = {};
       room.votes = {};
-      room.tieBreakerActive = false;
+      room.readyPlayers = {};
+      room.failedImposterGuess = null;
+      room.gameOverReason = '';
 
-      if (room.gameMode === 'rj') {
-        room.theNumber = Math.floor(Math.random() * 50) + 1;
-      } else {
-        room.theNumber = Math.floor(Math.random() * 10) + 1;
-      }
-
-      const imposterIndex = Math.floor(Math.random() * room.players.length);
+      // Define standard numeric goals
+      room.theNumber = room.gameMode === 'rj' ? 'Secret Word' : Math.floor(Math.random() * 10) + 1;
+      
+      // Select random imposter position
+      const imposterIdx = Math.floor(Math.random() * room.players.length);
+      room.roles = {};
       room.players.forEach((p, idx) => {
-        room.roles[p.id] = (idx === imposterIndex) ? 'imposter' : 'crewmate';
+        room.roles[p.id] = (idx === imposterIdx) ? 'imposter' : 'crewmate';
       });
 
-      room.readyPlayers = {};
       room.phase = 'role';
       io.to(roomCode).emit('goToRoleScreen', room);
     }
   });
 
-  /* ♣️ SEVEN OF CLUBS ACTION DRIVERS */
-  socket.on('sevenClubsPlayCard', ({ roomCode, suit, rank }) => {
-    const room = rooms[roomCode];
-    if (!room || room.phase !== 'sevenClubsBoard') return;
-
-    const activePlayer = room.players[room.sevenState.activeIndex];
-    if (socket.id !== activePlayer.id) return;
-
-    let hand = room.sevenState.hands[socket.id] || [];
-    const cardIdx = hand.findIndex(c => c.suit === suit && c.rank === rank);
-    if (cardIdx === -1) return;
-
-    const card = hand[cardIdx];
-    const suitTrack = room.sevenState.board[suit];
-    let legal = false;
-
-    if (card.rank === '7') {
-      if (!suitTrack.placed) {
-        suitTrack.placed = true;
-        suitTrack.min = 7;
-        suitTrack.max = 7;
-        legal = true;
-      }
-    } else if (suitTrack.placed) {
-      if (card.value === suitTrack.min - 1) {
-        suitTrack.min = card.value;
-        legal = true;
-      } else if (card.value === suitTrack.max + 1) {
-        suitTrack.max = card.value;
-        legal = true;
-      }
-    }
-
-    if (legal) {
-      hand.splice(cardIdx, 1);
-      processNextSevenClubsTurn(room, card.rank);
-    }
-  });
-
-  socket.on('sevenClubsPickFromNeighbor', ({ roomCode }) => {
-    const room = rooms[roomCode];
-    if (!room || room.phase !== 'sevenClubsBoard') return;
-
-    const activePlayer = room.players[room.sevenState.activeIndex];
-    if (socket.id !== activePlayer.id) return;
-
-    // Dynamically calculate the next left neighbor clockwise who still has cards
-    let currentIdx = room.sevenState.activeIndex;
-    let targetNeighborId = null;
-    let neighborHand = [];
-
-    for (let i = 1; i < room.players.length; i++) {
-      let nextIdx = (currentIdx + i) % room.players.length;
-      let possibleNeighbor = room.players[nextIdx];
-      let possibleHand = room.sevenState.hands[possibleNeighbor.id] || [];
-      if (possibleHand.length > 0) {
-        targetNeighborId = possibleNeighbor.id;
-        neighborHand = possibleHand;
-        break;
-      }
-    }
-
-    // Transfer the stolen card if a neighbor with cards exists
-    if (targetNeighborId && neighborHand.length > 0) {
-      const randIdx = Math.floor(Math.random() * neighborHand.length);
-      const stolenCard = neighborHand.splice(randIdx, 1)[0];
-      room.sevenState.hands[socket.id].push(stolenCard);
-
-      // Force the turn index to pass onwards to the next valid person instantly
-      processNextSevenClubsTurn(room, null);
-    }
-  });
-
-  /* 🔢 IMPOSTER MECHANICS TURN ENGINE */
+  // Player synchronization ready checkpoints
   socket.on('playerReady', ({ roomCode }) => {
     const room = rooms[roomCode];
     if (!room) return;
+
     room.readyPlayers[socket.id] = true;
     io.to(roomCode).emit('readyListUpdated', room.readyPlayers);
 
-    if (room.players.every(p => room.readyPlayers[p.id])) {
-      room.turnOrder = [...room.players];
-      for (let i = room.turnOrder.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [room.turnOrder[i], room.turnOrder[j]] = [room.turnOrder[j], room.turnOrder[i]];
-      }
-      room.currentTurnIndex = 0;
-      room.answers[room.round] = {};
+    const allReady = room.players.every(p => room.readyPlayers[p.id]);
+    if (allReady) {
+      room.turnOrder = [...room.players].sort(() => Math.random() - 0.5);
       room.phase = 'turnReveal';
       io.to(roomCode).emit('goToTurnRevealScreen', room);
     }
@@ -412,22 +189,25 @@ io.on('connection', (socket) => {
 
   socket.on('startAnswering', ({ roomCode }) => {
     const room = rooms[roomCode];
-    if (!room || socket.id !== room.hostId) return;
-    room.phase = 'answer';
-    io.to(roomCode).emit('goToAnswerScreen', room);
+    if (!room || room.hostId !== socket.id) return;
 
-    const activePlayer = room.turnOrder[room.currentTurnIndex];
-    io.to(roomCode).emit('nextTurnIndex', { activePlayerId: activePlayer.id, activePlayerName: activePlayer.name });
+    room.phase = 'answer';
+    room.activeIndex = 0;
+    room.answers[room.round] = {};
+
+    io.to(roomCode).emit('goToAnswerScreen', room);
+    sendNextActiveClueTurn(room);
   });
 
   socket.on('submitClue', ({ roomCode, clueWord }) => {
     const room = rooms[roomCode];
     if (!room) return;
 
-    const activePlayer = room.turnOrder[room.currentTurnIndex];
-    if (socket.id !== activePlayer.id) return;
+    const activePlayer = room.turnOrder[room.activeIndex];
+    if (!activePlayer || activePlayer.id !== socket.id) return;
 
     room.answers[room.round][socket.id] = clueWord;
+
     io.to(roomCode).emit('clueRevealedLive', {
       playerId: socket.id,
       playerName: activePlayer.name,
@@ -435,52 +215,26 @@ io.on('connection', (socket) => {
       roundAnswers: room.answers[room.round]
     });
 
-    room.currentTurnIndex++;
-    if (room.currentTurnIndex < room.turnOrder.length) {
-      const nextPlayer = room.turnOrder[room.currentTurnIndex];
-      io.to(roomCode).emit('nextTurnIndex', { activePlayerId: nextPlayer.id, activePlayerName: nextPlayer.name });
+    room.activeIndex++;
+    if (room.activeIndex < room.turnOrder.length) {
+      sendNextActiveClueTurn(room);
     } else {
       io.to(roomCode).emit('showAllClues', room);
     }
   });
 
-  socket.on('imposterGuessNumber', ({ roomCode, guessedNumber }) => {
-    const room = rooms[roomCode];
-    if (!room || room.roles[socket.id] !== 'imposter') return;
-
-    if (parseInt(guessedNumber) === room.theNumber) {
-      room.phase = 'result';
-      io.to(roomCode).emit('goToResultScreen', {
-        gameOverReason: "💥 IMPOSTER VICTORY! The Imposter intercepted the target sequence code accurately!",
-        roles: room.roles,
-        theNumber: room.theNumber,
-        voteTally: {},
-        tieBreakerActive: false
-      });
-    } else {
-      room.phase = 'result';
-      io.to(roomCode).emit('goToResultScreen', {
-        gameOverReason: "🛡️ CREWMATE VICTORY! The Imposter attempted a blind guess profile hack and failed!",
-        roles: room.roles,
-        theNumber: room.theNumber,
-        voteTally: {},
-        tieBreakerActive: false,
-        failedImposterGuess: guessedNumber
-      });
-    }
-  });
-
+  // Cycle phase engine logic for Imposter loops
   socket.on('nextPhase', ({ roomCode, targetPhase }) => {
     const room = rooms[roomCode];
-    if (!room || socket.id !== room.hostId) return;
+    if (!room || room.hostId !== socket.id) return;
 
     if (targetPhase === 'round2') {
       room.round = 2;
-      room.currentTurnIndex = 0;
+      room.phase = 'answer';
+      room.activeIndex = 0;
       room.answers[room.round] = {};
-      room.readyPlayers = {};
-      room.phase = 'turnReveal';
-      io.to(roomCode).emit('goToTurnRevealScreen', room);
+      io.to(roomCode).emit('goToAnswerScreen', room);
+      sendNextActiveClueTurn(room);
     } else if (targetPhase === 'askContinue') {
       room.continueVotes = {};
       room.phase = 'continueVote';
@@ -491,29 +245,30 @@ io.on('connection', (socket) => {
       io.to(roomCode).emit('goToVoteScreen', room);
     } else if (targetPhase === 'tiebreakerRound') {
       room.round++;
-      room.currentTurnIndex = 0;
-      room.answers[room.round] = {};
       room.phase = 'answer';
+      room.activeIndex = 0;
+      room.answers[room.round] = {};
       io.to(roomCode).emit('goToAnswerScreen', room);
-      const activePlayer = room.turnOrder[room.currentTurnIndex];
-      io.to(roomCode).emit('nextTurnIndex', { activePlayerId: activePlayer.id, activePlayerName: activePlayer.name });
+      sendNextActiveClueTurn(room);
     }
   });
 
   socket.on('submitContinueChoice', ({ roomCode, choice }) => {
     const room = rooms[roomCode];
     if (!room) return;
+
     room.continueVotes[socket.id] = choice;
     io.to(roomCode).emit('continueStatusUpdated', room.continueVotes);
 
     if (room.players.every(p => room.continueVotes[p.id])) {
-      const moreCount = Object.values(room.continueVotes).filter(v => v === 'more').length;
-      if (moreCount > room.players.length / 2) {
+      const moreVotes = Object.values(room.continueVotes).filter(v => v === 'more').length;
+      if (moreVotes > room.players.length / 2) {
         room.round++;
-        room.currentTurnIndex = 0;
+        room.phase = 'answer';
+        room.activeIndex = 0;
         room.answers[room.round] = {};
-        room.phase = 'turnReveal';
-        io.to(roomCode).emit('goToTurnRevealScreen', room);
+        io.to(roomCode).emit('goToAnswerScreen', room);
+        sendNextActiveClueTurn(room);
       } else {
         room.votes = {};
         room.phase = 'vote';
@@ -525,102 +280,259 @@ io.on('connection', (socket) => {
   socket.on('castVote', ({ roomCode, targetPlayerId }) => {
     const room = rooms[roomCode];
     if (!room) return;
+
     room.votes[socket.id] = targetPlayerId;
     io.to(roomCode).emit('voteStatusUpdated', room.votes);
 
     if (room.players.every(p => room.votes[p.id])) {
-      const tally = {};
-      room.players.forEach(p => tally[p.id] = 0);
-      Object.values(room.votes).forEach(target => {
-        if (tally[target] !== undefined) tally[target]++;
-      });
-
-      let highestVotes = -1;
-      let topVotedPlayers = [];
-      Object.keys(tally).forEach(pId => {
-        if (tally[pId] > highestVotes) {
-          highestVotes = tally[pId];
-          topVotedPlayers = [pId];
-        } else if (tally[pId] === highestVotes) {
-          topVotedPlayers.push(pId);
-        }
-      });
-
-      if (topVotedPlayers.length > 1) {
-        room.tieBreakerActive = true;
-        room.phase = 'result';
-        io.to(roomCode).emit('goToResultScreen', {
-          gameOverReason: "⚖️ TIE ENCOUNTERED! Voting metrics split evenly. Initiating host tiebreaker round...",
-          roles: room.roles,
-          theNumber: room.theNumber,
-          voteTally: tally,
-          tieBreakerActive: true
-        });
-      } else {
-        const accusedId = topVotedPlayers[0];
-        const isImposter = (room.roles[accusedId] === 'imposter');
-        room.phase = 'result';
-        room.tieBreakerActive = false;
-
-        const reason = isImposter 
-          ? "🛡️ CREWMATE VICTORY! The network correctly identified and ejected the profile match imposter!"
-          : "💥 IMPOSTER VICTORY! An innocent profile agent was exiled from the station architecture!";
-
-        io.to(roomCode).emit('goToResultScreen', {
-          gameOverReason: reason,
-          roles: room.roles,
-          theNumber: room.theNumber,
-          voteTally: tally,
-          tieBreakerActive: false
-        });
-      }
+      processImposterVoteResolution(room);
     }
+  });
+
+  socket.on('imposterGuessNumber', ({ roomCode, guessedNumber }) => {
+    const room = rooms[roomCode];
+    if (!room || room.roles[socket.id] !== 'imposter') return;
+
+    if (parseInt(guessedNumber) === parseInt(room.theNumber)) {
+      room.gameOverReason = "💥 Imposter guessed the Target Code accurately! Imposter Victory! 💥";
+    } else {
+      room.failedImposterGuess = guessedNumber;
+      room.gameOverReason = "🎉 Incorrect structural guess! Crewmate Victory! 🎉";
+    }
+    room.phase = 'result';
+    io.to(roomCode).emit('goToResultScreen', room);
+  });
+
+  // ─── SEVEN OF CLUBS TRANSACTION LOGIC ───────────────────
+  socket.on('sevenClubsPlayCard', ({ roomCode, suit, rank }) => {
+    const room = rooms[roomCode];
+    if (!room || !room.sevenState) return;
+
+    const stateObj = room.sevenState;
+    const activePlayer = room.players[stateObj.activeIndex];
+    if (!activePlayer || activePlayer.id !== socket.id) return;
+
+    // Check hand contains target element array tracking
+    const hand = stateObj.hands[socket.id] || [];
+    const cardIdx = hand.findIndex(c => c.suit === suit && c.rank === rank);
+    if (cardIdx === -1) return;
+
+    const targetCard = hand[cardIdx];
+    if (!isCardPlayable(targetCard, stateObj.board)) return;
+
+    // Remove from player hand deck tray
+    hand.splice(cardIdx, 1);
+
+    // Apply mutation structural flags to target board dimensions
+    const rankIdx = RANKS.indexOf(rank);
+    if (rank === '7') {
+      stateObj.board[suit].hasSeven = true;
+    } else if (rankIdx < 6) {
+      stateObj.board[suit].lowestPlaced = rankIdx;
+    } else if (rankIdx > 6) {
+      stateObj.board[suit].highestPlaced = rankIdx;
+    }
+
+    // --- POPUP ANNOUNCEMENT HOOK FOR K / A ---
+    if (rank === 'K' || rank === 'A') {
+      io.to(roomCode).emit('sevenClubsCardAlertPopup', {
+        player: activePlayer.name,
+        card: `${rank === 'K' ? '👑 King' : '🌟 Ace'} of ${suit}`
+      });
+    }
+
+    proceedNextSevenClubsTurn(room);
+  });
+
+  socket.on('sevenClubsPickFromNeighbor', ({ roomCode }) => {
+    const room = rooms[roomCode];
+    if (!room || !room.sevenState) return;
+
+    const stateObj = room.sevenState;
+    if (room.players[stateObj.activeIndex].id !== socket.id) return;
+
+    // Establish cyclical boundary constraints for index targeting
+    let leftNeighborIdx = (stateObj.activeIndex - 1 + room.players.length) % room.players.length;
+    while (leftNeighborIdx !== stateObj.activeIndex && (stateObj.hands[room.players[leftNeighborIdx].id] || []).length === 0) {
+      leftNeighborIdx = (leftNeighborIdx - 1 + room.players.length) % room.players.length;
+    }
+
+    if (leftNeighborIdx === stateObj.activeIndex) return; // Self mismatch boundary flag
+
+    const sourceHand = stateObj.hands[room.players[leftNeighborIdx].id] || [];
+    if (sourceHand.length === 0) return;
+
+    // Pluck random element from targeting array
+    const randomIdx = Math.floor(Math.random() * sourceHand.length);
+    const stolenCard = sourceHand.splice(randomIdx, 1)[0];
+
+    stateObj.hands[socket.id].push(stolenCard);
+
+    proceedNextSevenClubsTurn(room);
   });
 
   socket.on('resetGame', ({ roomCode }) => {
     const room = rooms[roomCode];
-    if (!room) return;
+    if (!room || room.hostId !== socket.id) return;
     room.phase = 'lobby';
-    room.roles = {};
-    room.theNumber = null;
-    room.turnOrder = [];
-    room.answers = {};
-    room.votes = {};
-    room.continueVotes = {};
-    room.tieBreakerActive = false;
-    room.sevenState = null;
     io.to(roomCode).emit('roomUpdated', room);
   });
 
   socket.on('disconnect', () => {
-    Object.keys(rooms).forEach(roomCode => {
-      const room = rooms[roomCode];
-      const index = room.players.findIndex(p => p.id === socket.id);
-      if (index !== -1) {
-        room.players.splice(index, 1);
+    Object.keys(rooms).forEach(code => {
+      const room = rooms[code];
+      const pIdx = room.players.findIndex(p => p.id === socket.id);
+      if (pIdx !== -1) {
+        room.players.splice(pIdx, 1);
         if (room.players.length === 0) {
-          delete rooms[roomCode];
+          delete rooms[code];
         } else {
           if (room.hostId === socket.id) {
             room.hostId = room.players[0].id;
           }
-          // If we are playing Seven of Clubs and a player leaves, re-adjust the turn structure safely
-          if (room.phase === 'sevenClubsBoard' && room.sevenState) {
-            if (room.sevenState.activeIndex >= room.players.length) {
-              room.sevenState.activeIndex = 0;
-            }
-            processNextSevenClubsTurn(room, null);
-          } else {
-            io.to(roomCode).emit('roomUpdated', room);
-          }
+          io.to(code).emit('roomUpdated', room);
         }
       }
     });
   });
-
 });
 
-const PORT = process.env.PORT || 3000;
-http.listen(PORT, () => {
-  console.log(`Game engine operational and logging metrics on port ${PORT}`);
+// ─── PROCEDURAL CONTROLLER HELPER METRICS ───────────────
+
+function sendNextActiveClueTurn(room) {
+  const activePlayer = room.turnOrder[room.activeIndex];
+  io.to(room.code).emit('nextTurnIndex', {
+    activePlayerId: activePlayer.id,
+    activePlayerName: activePlayer.name
+  });
+}
+
+function processImposterVoteResolution(room) {
+  const tally = {};
+  room.players.forEach(p => { tally[p.id] = 0; });
+  Object.values(room.votes).forEach(targetId => {
+    if (tally[targetId] !== undefined) tally[targetId]++;
+  });
+
+  room.voteTally = tally;
+
+  // Track max elements inside current array maps
+  const maxVotes = Math.max(...Object.values(tally));
+  const tiedPlayers = Object.keys(tally).filter(pId => tally[pId] === maxVotes);
+
+  if (tiedPlayers.length > 1) {
+    room.tieBreakerActive = true;
+    room.gameOverReason = "⚖️ Tied matrix outcome detected! Entering emergency tie-breaker loop.";
+    room.phase = 'result';
+    io.to(room.code).emit('goToResultScreen', room);
+    return;
+  }
+
+  // Absolute single target identified
+  const votedOutId = tiedPlayers[0];
+  const isImposter = room.roles[votedOutId] === 'imposter';
+  room.tieBreakerActive = false;
+
+  if (isImposter) {
+    room.gameOverReason = "🎉 Crewmates successfully isolated and captured the Imposter! Crewmate Victory! 🎉";
+  } else {
+    room.gameOverReason = "💥 Mistaken Profile Isolation! The Imposter slipped through security parameters. Imposter Victory! 💥";
+  }
+
+  room.phase = 'result';
+  io.to(room.code).emit('goToResultScreen', room);
+}
+
+function proceedNextSevenClubsTurn(room) {
+  const stateObj = room.sevenState;
+
+  // Log active player completions dynamically into standings profile for final podium extraction
+  room.players.forEach(p => {
+    if ((stateObj.hands[p.id] || []).length === 0 && !stateObj.winners.includes(p.name)) {
+      stateObj.winners.push(p.name);
+    }
+  });
+
+  const remainingPlayers = room.players.filter(p => (stateObj.hands[p.id] || []).length > 0);
+
+  // If 1 or 0 players remain active, the simulation terminates safely
+  if (remainingPlayers.length <= 1) {
+    if (remainingPlayers.length === 1) {
+      stateObj.winners.push(remainingPlayers[0].name);
+    }
+    room.phase = 'result';
+    io.to(room.code).emit('goToResultScreen', room);
+    return;
+  }
+
+  // Iterate to next adjacent array player with cards remaining
+  let index = stateObj.activeIndex;
+  do {
+    index = (index + 1) % room.players.length;
+  } while ((stateObj.hands[room.players[index].id] || []).length === 0);
+
+  stateObj.activeIndex = index;
+  syncSevenClubsState(room);
+}
+
+function syncSevenClubsState(room) {
+  const stateObj = room.sevenState;
+  const currentActivePlayer = room.players[stateObj.activeIndex];
+
+  // Resolve left neighbor balance bounds to determine target count properties
+  let leftNeighborIdx = (stateObj.activeIndex - 1 + room.players.length) % room.players.length;
+  while (leftNeighborIdx !== stateObj.activeIndex && (stateObj.hands[room.players[leftNeighborIdx].id] || []).length === 0) {
+    leftNeighborIdx = (leftNeighborIdx - 1 + room.players.length) % room.players.length;
+  }
+  const neighborId = room.players[leftNeighborIdx].id;
+  const count = (stateObj.hands[neighborId] || []).length;
+
+  // Build the 4x3 matrix layout view matching standard rows for all grid layouts
+  const suitsOrder = ['Clubs', 'Spades', 'Hearts', 'Diamonds'];
+  const gridCells = [];
+
+  suitsOrder.forEach((suitName, rowIdx) => {
+    const sState = stateObj.board[suitName];
+    // Fill the 3 horizontal card tracking column slots (Lowest, 7, Highest)
+    gridCells.push({
+      row: rowIdx + 1,
+      col: 1,
+      hasSuit: sState.hasSeven,
+      displayValue: sState.hasSeven && sState.lowestPlaced < 6 ? RANKS[sState.lowestPlaced] : '—'
+    });
+    gridCells.push({
+      row: rowIdx + 1,
+      col: 2,
+      hasSuit: sState.hasSeven,
+      displayValue: sState.hasSeven ? '7' : '—'
+    });
+    gridCells.push({
+      row: rowIdx + 1,
+      col: 3,
+      hasSuit: sState.hasSeven,
+      displayValue: sState.hasSeven && sState.highestPlaced > 6 ? RANKS[sState.highestPlaced] : '—'
+    });
+  });
+
+  // Unique emission for each user to preserve private hand tracking configurations
+  room.players.forEach(p => {
+    const pHand = stateObj.hands[p.id] || [];
+    const optimizedHand = pHand.map(card => ({
+      ...card,
+      isPlayable: p.id === currentActivePlayer.id && isCardPlayable(card, stateObj.board)
+    }));
+
+    io.to(p.id).emit('sevenClubsUpdateBoard', {
+      activePlayerId: currentActivePlayer.id,
+      activePlayerName: currentActivePlayer.name,
+      gridCells: gridCells,
+      myHand: optimizedHand,
+      neighborCardCount: count
+    });
+  });
+}
+
+// Start HTTP Workspace Application Listener
+server.listen(PORT, () => {
+  console.log(`Server executing live parameters on port: ${PORT}`);
 });
