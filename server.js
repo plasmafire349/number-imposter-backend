@@ -28,383 +28,359 @@ app.get('/', (req, res) => {
 
 const rooms = {};
 
-// A massive pool of 300 popular words grouped into 15 clear categories (No movies, no anime)
 const rjWordPool = [
-  // 1. ANIMALS (20)
   { category: "ANIMALS", word: "LION" }, { category: "ANIMALS", word: "TIGER" }, { category: "ANIMALS", word: "ELEPHANT" }, { category: "ANIMALS", word: "GIRAFFE" }, { category: "ANIMALS", word: "MONKEY" },
-  { category: "ANIMALS", word: "PENGUIN" }, { category: "ANIMALS", word: "DOLPHIN" }, { category: "ANIMALS", word: "KANGAROO" }, { category: "ANIMALS", word: "PANDA" }, { category: "ANIMALS", word: "CHEETAH" },
-  { category: "ANIMALS", word: "OCTOPUS" }, { category: "ANIMALS", word: "SQUIRREL" }, { category: "ANIMALS", word: "HAMSTER" }, { category: "ANIMALS", word: "LEOPARD" }, { category: "ANIMALS", word: "FLAMINGO" },
-  { category: "ANIMALS", word: "ALLIGATOR" }, { category: "ANIMALS", word: "GORILLA" }, { category: "ANIMALS", word: "KOALA" }, { category: "ANIMALS", word: "WOLF" }, { category: "ANIMALS", word: "RABBIT" },
-
-  // 2. FOOD & DRINK (20)
   { category: "FOOD & DRINK", word: "PIZZA" }, { category: "FOOD & DRINK", word: "BURGER" }, { category: "FOOD & DRINK", word: "PASTA" }, { category: "FOOD & DRINK", word: "SUSHI" }, { category: "FOOD & DRINK", word: "TACO" },
-  { category: "FOOD & DRINK", word: "STEAK" }, { category: "FOOD & DRINK", word: "PANCAKE" }, { category: "FOOD & DRINK", word: "WAFFLE" }, { category: "FOOD & DRINK", word: "SANDWICH" }, { category: "FOOD & DRINK", word: "SALAD" },
-  { category: "FOOD & DRINK", word: "CHOCOLATE" }, { category: "FOOD & DRINK", word: "ICECREAM" }, { category: "FOOD & DRINK", word: "DONUT" }, { category: "FOOD & DRINK", word: "COFFEE" }, { category: "FOOD & DRINK", word: "SMOOTHIE" },
-  { category: "FOOD & DRINK", word: "POPCORN" }, { category: "FOOD & DRINK", word: "CHEESE" }, { category: "FOOD & DRINK", word: "NUGGETS" }, { category: "FOOD & DRINK", word: "COOKIE" }, { category: "FOOD & DRINK", word: "CUPCAKE" },
-
-  // 3. FRUITS & VEGETABLES (20)
-  { category: "FRUITS & VEGETABLES", word: "BANANA" }, { category: "FRUITS & VEGETABLES", word: "APPLE" }, { category: "FRUITS & VEGETABLES", word: "STRAWBERRY" }, { category: "FRUITS & VEGETABLES", word: "WATERMELON" }, { category: "FRUITS & VEGETABLES", word: "MANGO" },
-  { category: "FRUITS & VEGETABLES", word: "ORANGE" }, { category: "FRUITS & VEGETABLES", word: "GRAPES" }, { category: "FRUITS & VEGETABLES", word: "PINEAPPLE" }, { category: "FRUITS & VEGETABLES", word: "BLUEBERRY" }, { category: "FRUITS & VEGETABLES", word: "AVOCADO" },
-  { category: "FRUITS & VEGETABLES", word: "POTATO" }, { category: "FRUITS & VEGETABLES", word: "TOMATO" }, { category: "FRUITS & VEGETABLES", word: "CARROT" }, { category: "FRUITS & VEGETABLES", word: "BROCCOLI" }, { category: "FRUITS & VEGETABLES", word: "CUCUMBER" },
-  { category: "FRUITS & VEGETABLES", word: "GARLIC" }, { category: "FRUITS & VEGETABLES", word: "ONION" }, { category: "FRUITS & VEGETABLES", word: "LEMON" }, { category: "FRUITS & VEGETABLES", word: "PEACH" }, { category: "FRUITS & VEGETABLES", word: "CORN" },
-
-  // 4. SPORTS & GAMES (20)
-  { category: "SPORTS & GAMES", word: "SOCCER" }, { category: "SPORTS & GAMES", word: "BASKETBALL" }, { category: "SPORTS & GAMES", word: "FOOTBALL" }, { category: "SPORTS & GAMES", word: "TENNIS" }, { category: "SPORTS & GAMES", word: "BASEBALL" },
-  { category: "SPORTS & GAMES", word: "VOLLEYBALL" }, { category: "SPORTS & GAMES", word: "GOLF" }, { category: "SPORTS & GAMES", word: "BOXING" }, { category: "SPORTS & GAMES", word: "BOWLING" }, { category: "SPORTS & GAMES", word: "BILLIARDS" },
-  { category: "SPORTS & GAMES", word: "CHESS" }, { category: "SPORTS & GAMES", word: "CHECKERS" }, { category: "SPORTS & GAMES", word: "DOMINOES" }, { category: "SPORTS & GAMES", word: "MONOPOLY" }, { category: "SPORTS & GAMES", word: "MINECRAFT" },
-  { category: "SPORTS & GAMES", word: "FORTNITE" }, { category: "SPORTS & GAMES", word: "POKER" }, { category: "SPORTS & GAMES", word: "RUNNING" }, { category: "SPORTS & GAMES", word: "SWIMMING" }, { category: "SPORTS & GAMES", word: "KARATE" },
-
-  // 5. JOBS & OCCUPATIONS (20)
-  { category: "JOBS & OCCUPATIONS", word: "DOCTOR" }, { category: "JOBS & OCCUPATIONS", word: "NURSE" }, { category: "JOBS & OCCUPATIONS", word: "POLICE" }, { category: "JOBS & OCCUPATIONS", word: "FIREFIGHTER" }, { category: "JOBS & OCCUPATIONS", word: "TEACHER" },
-  { category: "JOBS & OCCUPATIONS", word: "CHEF" }, { category: "JOBS & OCCUPATIONS", word: "PILOT" }, { category: "JOBS & OCCUPATIONS", word: "ASTRONAUT" }, { category: "JOBS & OCCUPATIONS", word: "ENGINEER" }, { category: "JOBS & OCCUPATIONS", word: "SCIENTIST" },
-  { category: "JOBS & OCCUPATIONS", word: "ARTIST" }, { category: "JOBS & OCCUPATIONS", word: "ACTOR" }, { category: "JOBS & OCCUPATIONS", word: "SINGER" }, { category: "JOBS & OCCUPATIONS", word: "LAWYER" }, { category: "JOBS & OCCUPATIONS", word: "FARMER" },
-  { category: "JOBS & OCCUPATIONS", word: "BAKER" }, { category: "JOBS & OCCUPATIONS", word: "BARBER" }, { category: "JOBS & OCCUPATIONS", word: "DENTIST" }, { category: "JOBS & OCCUPATIONS", word: "JOURNALIST" }, { category: "JOBS & OCCUPATIONS", word: "CAPTAIN" },
-
-  // 6. HOUSEHOLD ITEMS (20)
-  { category: "HOUSEHOLD ITEMS", word: "TELEVISION" }, { category: "HOUSEHOLD ITEMS", word: "REFRIGERATOR" }, { category: "HOUSEHOLD ITEMS", word: "MICROWAVE" }, { category: "HOUSEHOLD ITEMS", word: "TOASTER" }, { category: "HOUSEHOLD ITEMS", word: "BLENDER" },
-  { category: "HOUSEHOLD ITEMS", word: "SOFA" }, { category: "HOUSEHOLD ITEMS", word: "BEDROOM" }, { category: "HOUSEHOLD ITEMS", word: "WARDROBE" }, { category: "HOUSEHOLD ITEMS", word: "MIRROR" }, { category: "HOUSEHOLD ITEMS", word: "CLOCK" },
-  { category: "HOUSEHOLD ITEMS", word: "COMPUTER" }, { category: "HOUSEHOLD ITEMS", word: "TELEPHONE" }, { category: "HOUSEHOLD ITEMS", word: "BLANKET" }, { category: "HOUSEHOLD ITEMS", word: "PILLOW" }, { category: "HOUSEHOLD ITEMS", word: "MATTRESS" },
-  { category: "HOUSEHOLD ITEMS", word: "CURTAIN" }, { category: "HOUSEHOLD ITEMS", word: "CARPET" }, { category: "HOUSEHOLD ITEMS", word: "LAMP" }, { category: "HOUSEHOLD ITEMS", word: "VACUUM" }, { category: "HOUSEHOLD ITEMS", word: "CHAIR" },
-
-  // 7. KITCHEN UTENSILS (20)
-  { category: "KITCHEN UTENSILS", word: "SPOON" }, { category: "KITCHEN UTENSILS", word: "FORK" }, { category: "KITCHEN UTENSILS", word: "KNIFE" }, { category: "KITCHEN UTENSILS", word: "PLATE" }, { category: "KITCHEN UTENSILS", word: "BOWL" },
-  { category: "KITCHEN UTENSILS", word: "GLASS" }, { category: "KITCHEN UTENSILS", word: "TEACUP" }, { category: "KITCHEN UTENSILS", word: "TEAPOT" }, { category: "KITCHEN UTENSILS", word: "FRYINGPAN" }, { category: "KITCHEN UTENSILS", word: "SAUCEPAN" },
-  { category: "KITCHEN UTENSILS", word: "SPATULA" }, { category: "KITCHEN UTENSILS", word: "TONGS" }, { category: "KITCHEN UTENSILS", word: "WHISK" }, { category: "KITCHEN UTENSILS", word: "PEELER" }, { category: "KITCHEN UTENSILS", word: "GRATER" },
-  { category: "KITCHEN UTENSILS", word: "STRAINER" }, { category: "KITCHEN UTENSILS", word: "COLANDER" }, { category: "KITCHEN UTENSILS", word: "PITCHER" }, { category: "KITCHEN UTENSILS", word: "THERMOS" }, { category: "KITCHEN UTENSILS", word: "CANNISTER" },
-
-  // 8. CLOTHING & APPAREL (20)
-  { category: "CLOTHING & APPAREL", word: "SHIRT" }, { category: "CLOTHING & APPAREL", word: "JEANS" }, { category: "CLOTHING & APPAREL", word: "JACKET" }, { category: "CLOTHING & APPAREL", word: "SWEATER" }, { category: "CLOTHING & APPAREL", word: "HOODIE" },
-  { category: "CLOTHING & APPAREL", word: "SHORTS" }, { category: "CLOTHING & APPAREL", word: "SKIRT" }, { category: "CLOTHING & APPAREL", word: "DRESS" }, { category: "CLOTHING & APPAREL", word: "SUIT" }, { category: "CLOTHING & APPAREL", word: "SOCKS" },
-  { category: "CLOTHING & APPAREL", word: "SHOES" }, { category: "CLOTHING & APPAREL", word: "SNEAKERS" }, { category: "CLOTHING & APPAREL", word: "BOOTS" }, { category: "CLOTHING & APPAREL", word: "SANDALS" }, { category: "CLOTHING & APPAREL", word: "HAT" },
-  { category: "CLOTHING & APPAREL", word: "CAP" }, { category: "CLOTHING & APPAREL", word: "GLOVES" }, { category: "CLOTHING & APPAREL", word: "SCARF" }, { category: "CLOTHING & APPAREL", word: "BELT" }, { category: "CLOTHING & APPAREL", word: "PAJAMAS" },
-
-  // 9. VEHICLES & TRANSPORT (20)
-  { category: "VEHICLES & TRANSPORT", word: "BICYCLE" }, { category: "VEHICLES & TRANSPORT", word: "MOTORCYCLE" }, { category: "VEHICLES & TRANSPORT", word: "AUTOMOBILE" }, { category: "VEHICLES & TRANSPORT", word: "SUPERCAR" }, { category: "VEHICLES & TRANSPORT", word: "TRUCK" },
-  { category: "VEHICLES & TRANSPORT", word: "TRACTOR" }, { category: "VEHICLES & TRANSPORT", word: "TRAIN" }, { category: "VEHICLES & TRANSPORT", word: "SUBWAY" }, { category: "VEHICLES & TRANSPORT", word: "AIRPLANE" }, { category: "VEHICLES & TRANSPORT", word: "HELICOPTER" },
-  { category: "VEHICLES & TRANSPORT", word: "JETPLANE" }, { category: "VEHICLES & TRANSPORT", word: "SPACESHIP" }, { category: "VEHICLES & TRANSPORT", word: "ROCKETSHIP" }, { category: "VEHICLES & TRANSPORT", word: "SPEEDBOAT" }, { category: "VEHICLES & TRANSPORT", word: "SUBMARINE" },
-  { category: "VEHICLES & TRANSPORT", word: "FERRY" }, { category: "VEHICLES & TRANSPORT", word: "YACHT" }, { category: "VEHICLES & TRANSPORT", word: "SCOOTER" }, { category: "VEHICLES & TRANSPORT", word: "AMBULANCE" }, { category: "VEHICLES & TRANSPORT", word: "FIREENGINE" },
-
-  // 10. PLACES & BUILDINGS (20)
-  { category: "PLACES & BUILDINGS", word: "SCHOOL" }, { category: "PLACES & BUILDINGS", word: "COLLEGE" }, { category: "PLACES & BUILDINGS", word: "HOSPITAL" }, { category: "PLACES & BUILDINGS", word: "HOTEL" }, { category: "PLACES & BUILDINGS", word: "RESTAURANT" },
-  { category: "PLACES & BUILDINGS", word: "MUSEUM" }, { category: "PLACES & BUILDINGS", word: "LIBRARY" }, { category: "PLACES & BUILDINGS", word: "AIRPORT" }, { category: "PLACES & BUILDINGS", word: "STATION" }, { category: "PLACES & BUILDINGS", word: "SUPERMARKET" },
-  { category: "PLACES & BUILDINGS", word: "CASTLE" }, { category: "PLACES & BUILDINGS", word: "PALACE" }, { category: "PLACES & BUILDINGS", word: "CHURCH" }, { category: "PLACES & BUILDINGS", word: "FACTORY" }, { category: "PLACES & BUILDINGS", word: "OFFICE" },
-  { category: "PLACES & BUILDINGS", word: "STADIUM" }, { category: "PLACES & BUILDINGS", word: "THEATER" }, { category: "PLACES & BUILDINGS", word: "SKYSCRAPER" }, { category: "PLACES & BUILDINGS", word: "COTTAGE" }, { category: "PLACES & BUILDINGS", word: "HOUSE" },
-
-  // 11. NATURE & GEOGRAPHY (20)
-  { category: "NATURE & GEOGRAPHY", word: "MOUNTAIN" }, { category: "NATURE & GEOGRAPHY", word: "VALLEY" }, { category: "NATURE & GEOGRAPHY", word: "CANYON" }, { category: "NATURE & GEOGRAPHY", word: "DESERT" }, { category: "NATURE & GEOGRAPHY", word: "FOREST" },
-  { category: "NATURE & GEOGRAPHY", word: "JUNGLE" }, { category: "NATURE & GEOGRAPHY", word: "ISLAND" }, { category: "NATURE & GEOGRAPHY", word: "BEACH" }, { category: "NATURE & GEOGRAPHY", word: "OCEAN" }, { category: "NATURE & GEOGRAPHY", word: "RIVER" },
-  { category: "NATURE & GEOGRAPHY", word: "WATERFALL" }, { category: "NATURE & GEOGRAPHY", word: "VOLCANO" }, { category: "NATURE & GEOGRAPHY", word: "GEYSER" }, { category: "NATURE & GEOGRAPHY", word: "ICEBERG" }, { category: "NATURE & GEOGRAPHY", word: "GLACIER" },
-  { category: "NATURE & GEOGRAPHY", word: "CAVERN" }, { category: "NATURE & GEOGRAPHY", word: "MEADOW" }, { category: "NATURE & GEOGRAPHY", word: "SWAMP" }, { category: "NATURE & GEOGRAPHY", word: "PRAIRIE" }, { category: "NATURE & GEOGRAPHY", word: "OASIS" },
-
-  // 12. SPACE & ASTRONOMY (20)
-  { category: "SPACE & ASTRONOMY", word: "PLANET" }, { category: "SPACE & ASTRONOMY", word: "GALAXY" }, { category: "SPACE & ASTRONOMY", word: "NEBULA" }, { category: "SPACE & ASTRONOMY", word: "METEOR" }, { category: "SPACE & ASTRONOMY", word: "COMET" },
-  { category: "SPACE & ASTRONOMY", word: "ASTEROID" }, { category: "SPACE & ASTRONOMY", word: "SATELLITE" }, { category: "SPACE & ASTRONOMY", word: "TELESCOPE" }, { category: "SPACE & ASTRONOMY", word: "SUPERNOVA" }, { category: "SPACE & ASTRONOMY", word: "STARLIGHT" },
-  { category: "SPACE & ASTRONOMY", word: "SUNRISE" }, { category: "SPACE & ASTRONOMY", word: "MOONLIGHT" }, { category: "SPACE & ASTRONOMY", word: "GRAVITY" }, { category: "SPACE & ASTRONOMY", word: "ORBIT" }, { category: "SPACE & ASTRONOMY", word: "CONSTELLATION" },
-  { category: "SPACE & ASTRONOMY", word: "COSMOS" }, { category: "SPACE & ASTRONOMY", word: "UNIVERSE" }, { category: "SPACE & ASTRONOMY", word: "BLACKHOLE" }, { category: "SPACE & ASTRONOMY", word: "ECLIPSE" }, { category: "SPACE & ASTRONOMY", word: "CRATER" },
-
-  // 13. WEATHER & ELEMENTS (20)
-  { category: "WEATHER & ELEMENTS", word: "SUNSHINE" }, { category: "WEATHER & ELEMENTS", word: "RAINDROP" }, { category: "WEATHER & ELEMENTS", word: "SNOWFLAKE" }, { category: "WEATHER & ELEMENTS", word: "LIGHTNING" }, { category: "WEATHER & ELEMENTS", word: "THUNDER" },
-  { category: "WEATHER & ELEMENTS", word: "HURRICANE" }, { category: "WEATHER & ELEMENTS", word: "TORNADO" }, { category: "WEATHER & ELEMENTS", word: "BLIZZARD" }, { category: "WEATHER & ELEMENTS", word: "RAINBOW" }, { category: "WEATHER & ELEMENTS", word: "WILDFIRE" },
-  { category: "WEATHER & ELEMENTS", word: "EARTHQUAKE" }, { category: "WEATHER & ELEMENTS", word: "TSUNAMI" }, { category: "WEATHER & ELEMENTS", word: "AVALANCHE" }, { category: "WEATHER & ELEMENTS", word: "WEATHERMIST" }, { category: "WEATHER & ELEMENTS", word: "SANDSTORM" },
-  { category: "WEATHER & ELEMENTS", word: "MONSOON" }, { category: "WEATHER & ELEMENTS", word: "BREEZE" }, { category: "WEATHER & ELEMENTS", word: "PUDDLE" }, { category: "WEATHER & ELEMENTS", word: "CYCLONE" }, { category: "WEATHER & ELEMENTS", word: "TYPHOON" },
-
-  // 14. TECH & DEVICES (20)
-  { category: "TECH & DEVICES", word: "SMARTPHONE" }, { category: "TECH & DEVICES", word: "LAPTOP" }, { category: "TECH & DEVICES", word: "KEYBOARD" }, { category: "TECH & DEVICES", word: "MOUSE" }, { category: "TECH & DEVICES", word: "MONITOR" },
-  { category: "TECH & DEVICES", word: "PRINTER" }, { category: "TECH & DEVICES", word: "ROUTER" }, { category: "TECH & DEVICES", word: "HEADPHONES" }, { category: "TECH & DEVICES", word: "SPEAKER" }, { category: "TECH & DEVICES", word: "CAMERA" },
-  { category: "TECH & DEVICES", word: "SMARTWATCH" }, { category: "TECH & DEVICES", word: "TELEVISION" }, { category: "TECH & DEVICES", word: "PROJECTOR" }, { category: "TECH & DEVICES", word: "CONTROLLER" }, { category: "TECH & DEVICES", word: "DRONE" },
-  { category: "TECH & DEVICES", word: "BATTERY" }, { category: "TECH & DEVICES", word: "CHARGER" }, { category: "TECH & DEVICES", word: "MICROPHONE" }, { category: "TECH & DEVICES", word: "WEBCAM" }, { category: "TECH & DEVICES", word: "PROCESSOR" },
-
-  // 15. MUSICAL INSTRUMENTS (20)
-  { category: "MUSICAL INSTRUMENTS", word: "PIANO" }, { category: "MUSICAL INSTRUMENTS", word: "GUITAR" }, { category: "MUSICAL INSTRUMENTS", word: "VIOLIN" }, { category: "MUSICAL INSTRUMENTS", word: "DRUMS" }, { category: "MUSICAL INSTRUMENTS", word: "FLUTE" },
-  { category: "MUSICAL INSTRUMENTS", word: "TRUMPET" }, { category: "MUSICAL INSTRUMENTS", word: "SAXOPHONE" }, { category: "MUSICAL INSTRUMENTS", word: "CLARINET" }, { category: "MUSICAL INSTRUMENTS", word: "HARP" }, { category: "MUSICAL INSTRUMENTS", word: "ACCORDION" },
-  { category: "MUSICAL INSTRUMENTS", word: "CELLO" }, { category: "MUSICAL INSTRUMENTS", word: "TROMBONE" }, { category: "MUSICAL INSTRUMENTS", word: "UKULELE" }, { category: "MUSICAL INSTRUMENTS", word: "BANJO" }, { category: "MUSICAL INSTRUMENTS", word: "HARMONICA" },
-  { category: "MUSICAL INSTRUMENTS", word: "CYMBALS" }, { category: "MUSICAL INSTRUMENTS", word: "TAMBOURINE" }, { category: "MUSICAL INSTRUMENTS", word: "XYLOPHONE" }, { category: "MUSICAL INSTRUMENTS", word: "KEYBOARD" }, { category: "MUSICAL INSTRUMENTS", word: "ORGAN" }
+  { category: "VEHICLES & TRANSPORT", word: "BICYCLE" }, { category: "VEHICLES & TRANSPORT", word: "MOTORCYCLE" }, { category: "VEHICLES & TRANSPORT", word: "AUTOMOBILE" }, { category: "VEHICLES & TRANSPORT", word: "SPACESHIP" }, { category: "VEHICLES & TRANSPORT", word: "SUBMARINE" },
+  { category: "PLACES & BUILDINGS", word: "SCHOOL" }, { category: "PLACES & BUILDINGS", word: "COLLEGE" }, { category: "PLACES & BUILDINGS", word: "HOSPITAL" }, { category: "PLACES & BUILDINGS", word: "HOTEL" }, { category: "PLACES & BUILDINGS", word: "CASTLE" }
 ];
 
 function generateRoomCode() {
-  const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-  let code = '';
-  for (let i = 0; i < 4; i++) {
-    code += letters.charAt(Math.floor(Math.random() * letters.length));
-  }
-  return code;
+  return Math.random().toString(36).substring(2, 6).toUpperCase();
 }
 
-function shuffleArray(array) {
-  const copy = [...array];
-  for (let i = copy.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [copy[i], copy[j]] = [copy[j], copy[i]];
-  }
-  return copy;
+function getCardNumericValue(rank) {
+  if (rank === 'A') return 1;
+  if (rank === 'J') return 11;
+  if (rank === 'Q') return 12;
+  if (rank === 'K') return 13;
+  return parseInt(rank);
 }
 
-// All real-time socket events MUST live inside this bracket block:
+function handleNextTurnIndex(roomCode) {
+  const room = rooms[roomCode];
+  if (!room) return;
+
+  const currentRoundAnswers = room.answers[room.round] || {};
+  const nextPlayer = room.turnOrder.find(p => currentRoundAnswers[p.id] === undefined);
+
+  if (nextPlayer) {
+    io.to(roomCode).emit('nextTurnIndex', {
+      activePlayerId: nextPlayer.id,
+      activePlayerName: nextPlayer.name
+    });
+  } else {
+    io.to(roomCode).emit('showAllClues', room);
+  }
+}
+
 io.on('connection', (socket) => {
-  console.log(`User connected: ${socket.id}`);
+  console.log(`Connected client: ${socket.id}`);
 
   socket.on('createRoom', ({ playerName, gameMode }) => {
-    let roomCode = generateRoomCode();
-    while (rooms[roomCode]) {
-      roomCode = generateRoomCode();
-    }
-
-    rooms[roomCode] = {
-      code: roomCode,
+    const code = generateRoomCode();
+    rooms[code] = {
+      code: code,
       hostId: socket.id,
-      players: [{ id: socket.id, name: playerName }],
+      gameMode: gameMode,
       phase: 'lobby',
-      gameMode: gameMode || 'number', 
       round: 1,
+      players: [{ id: socket.id, name: playerName }],
       roles: {},
       theNumber: null,
       currentCategory: "",
-      readyPlayers: {},
-      turnOrder: [], 
-      currentTurnIndex: 0,
+      turnOrder: [],
       answers: {},
+      voteTally: {},
+      readyPlayers: {},
       continueVotes: {},
-      votes: {},
-      tieBreakerActive: false,
       failedImposterGuess: null,
-      gameOverReason: ""
+      gameOverReason: "",
+      // Seven of Clubs State Properties
+      playerHands: {},
+      boardLayout: {
+        Clubs: { min: null, max: null },
+        Diamonds: { min: null, max: null },
+        Hearts: { min: null, max: null },
+        Spades: { min: null, max: null }
+      },
+      currentTurnIndex: 0,
+      standingsList: []
     };
 
-    socket.join(roomCode);
-    socket.emit('roomUpdated', rooms[roomCode]);
+    socket.join(code);
+    socket.emit('roomUpdated', rooms[code]);
   });
 
   socket.on('joinRoom', ({ roomCode, playerName }) => {
-    const code = roomCode.toUpperCase();
-    const room = rooms[code];
+    const cleanedCode = roomCode.trim().toUpperCase();
+    const room = rooms[cleanedCode];
 
-    if (!room) return socket.emit('errorMsg', 'Room not found.');
-    if (room.phase !== 'lobby') return socket.emit('errorMsg', 'Game has already started.');
+    if (!room) return socket.emit('errorMsg', 'Room workspace not discovered.');
+    if (room.phase !== 'lobby') return socket.emit('errorMsg', 'Game session already running.');
 
     room.players.push({ id: socket.id, name: playerName });
-    socket.join(code);
-    io.to(code).emit('roomUpdated', room);
+    socket.join(cleanedCode);
+    io.to(cleanedCode).emit('roomUpdated', room);
   });
 
   socket.on('startGame', ({ roomCode }) => {
-    const room = rooms[roomCode.toUpperCase()];
+    const room = rooms[roomCode];
     if (!room || room.hostId !== socket.id) return;
-    if (room.players.length < 3) return socket.emit('errorMsg', 'Need at least 3 players to start!');
 
-    room.phase = 'role';
-    room.round = 1;
-    room.tieBreakerActive = false;
-    room.failedImposterGuess = null;
-    room.answers = {};
-    room.roles = {};
-    room.readyPlayers = {};
-    room.currentCategory = "";
-
-    if (room.gameMode === 'rj') {
-      const randomObject = rjWordPool[Math.floor(Math.random() * rjWordPool.length)];
-      room.theNumber = randomObject.word; 
-      room.currentCategory = randomObject.category; 
-    } else {
-      room.theNumber = Math.floor(Math.random() * 10) + 1;
-      room.currentCategory = "NUMBERS";
+    if (room.players.length < 2) {
+      return socket.emit('errorMsg', 'You need at least 2 players to start.');
     }
 
-    const playerIndices = Array.from({ length: room.players.length }, (_, i) => i);
-    const shuffledIndices = shuffleArray(playerIndices);
-    const imposterIndex = shuffledIndices[0]; 
+    if (room.gameMode === 'seven') {
+      // Build and shuffle deck
+      const suits = ['Clubs', 'Diamonds', 'Hearts', 'Spades'];
+      const ranks = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
+      let deck = [];
+      suits.forEach(s => {
+        ranks.forEach(r => {
+          deck.push({ rank: r, suit: s });
+        });
+      });
+      deck.sort(() => Math.random() - 0.5);
 
-    room.players.forEach((player, idx) => {
-      if (idx === imposterIndex) {
-        room.roles[player.id] = 'imposter';
-      } else {
-        room.roles[player.id] = 'crewmate';
+      // Distribute cards evenly
+      room.players.forEach(p => room.playerHands[p.id] = []);
+      let playerIdx = 0;
+      while (deck.length > 0) {
+        const card = deck.pop();
+        const pId = room.players[playerIdx].id;
+        room.playerHands[pId].push(card);
+        playerIdx = (playerIdx + 1) % room.players.length;
       }
-    });
 
-    room.turnOrder = shuffleArray(room.players);
+      // Find initial turn holder holding 7 of Clubs
+      let startingTurn = 0;
+      room.players.forEach((p, idx) => {
+        const hand = room.playerHands[p.id];
+        const holds7Clubs = hand.some(c => c.rank === '7' && c.suit === 'Clubs');
+        if (holds7Clubs) startingTurn = idx;
+      });
 
-    io.to(room.code).emit('goToRoleScreen', room);
+      room.currentTurnIndex = startingTurn;
+      room.phase = 'sevenClubsBoard';
+      room.boardLayout = {
+        Clubs: { min: null, max: null },
+        Diamonds: { min: null, max: null },
+        Hearts: { min: null, max: null },
+        Spades: { min: null, max: null }
+      };
+      room.standingsList = [];
+
+      io.to(roomCode).emit('sevenClubsUpdateBoard', room);
+    } else {
+      room.phase = 'role';
+      if (room.gameMode === 'rj') {
+        const entry = rjWordPool[Math.floor(Math.random() * rjWordPool.length)];
+        room.currentCategory = entry.category;
+        room.theNumber = entry.word;
+      } else {
+        room.theNumber = Math.floor(Math.random() * 10) + 1;
+      }
+
+      const imposterIndex = Math.floor(Math.random() * room.players.length);
+      room.players.forEach((p, idx) => {
+        room.roles[p.id] = (idx === imposterIndex) ? 'imposter' : 'crewmate';
+      });
+
+      io.to(roomCode).emit('goToRoleScreen', room);
+    }
   });
 
   socket.on('playerReady', ({ roomCode }) => {
-    const room = rooms[roomCode.toUpperCase()];
+    const room = rooms[roomCode];
     if (!room) return;
 
     room.readyPlayers[socket.id] = true;
-    io.to(room.code).emit('readyListUpdated', room.readyPlayers);
+    io.to(roomCode).emit('readyListUpdated', room.readyPlayers);
 
-    const allReady = room.players.every(p => room.readyPlayers[p.id]);
-    if (allReady) {
+    if (Object.keys(room.readyPlayers).length === room.players.length) {
       room.phase = 'turnReveal';
-      io.to(room.code).emit('goToTurnRevealScreen', room);
+      room.turnOrder = [...room.players].sort(() => Math.random() - 0.5);
+      io.to(roomCode).emit('goToTurnRevealScreen', room);
     }
   });
 
   socket.on('startAnswering', ({ roomCode }) => {
-    const room = rooms[roomCode.toUpperCase()];
+    const room = rooms[roomCode];
     if (!room || room.hostId !== socket.id) return;
 
     room.phase = 'answer';
-    room.currentTurnIndex = 0;
-    if (!room.answers[room.round]) {
-      room.answers[room.round] = {};
-    }
+    if (!room.answers[room.round]) room.answers[room.round] = {};
 
-    io.to(room.code).emit('goToAnswerScreen', room);
-
-    const firstPlayer = room.turnOrder[0];
-    io.to(room.code).emit('nextTurnIndex', {
-      activePlayerId: firstPlayer.id,
-      activePlayerName: firstPlayer.name
-    });
+    io.to(roomCode).emit('goToAnswerScreen', room);
+    handleNextTurnIndex(roomCode);
   });
 
   socket.on('submitClue', ({ roomCode, clueWord }) => {
-    const room = rooms[roomCode.toUpperCase()];
+    const room = rooms[roomCode];
     if (!room) return;
 
-    const activePlayer = room.turnOrder[room.currentTurnIndex];
-    if (socket.id !== activePlayer.id) return; 
+    const roundAnswers = room.answers[room.round];
+    roundAnswers[socket.id] = clueWord;
 
-    room.answers[room.round][socket.id] = clueWord;
-
-    io.to(room.code).emit('clueRevealedLive', {
+    io.to(roomCode).emit('clueRevealedLive', {
       playerId: socket.id,
-      playerName: activePlayer.name,
+      playerName: room.players.find(p => p.id === socket.id)?.name || "Unknown",
       clueWord: clueWord,
-      roundAnswers: room.answers[room.round]
+      roundAnswers: roundAnswers
     });
 
-    room.currentTurnIndex++;
-
-    if (room.currentTurnIndex < room.turnOrder.length) {
-      const nextPlayer = room.turnOrder[room.currentTurnIndex];
-      io.to(room.code).emit('nextTurnIndex', {
-        activePlayerId: nextPlayer.id,
-        activePlayerName: nextPlayer.name
-      });
-    } else {
-      io.to(room.code).emit('showAllClues', room);
-    }
+    handleNextTurnIndex(roomCode);
   });
 
   socket.on('nextPhase', ({ roomCode, targetPhase }) => {
-    const room = rooms[roomCode.toUpperCase()];
+    const room = rooms[roomCode];
     if (!room || room.hostId !== socket.id) return;
 
-    if (targetPhase === 'round2') {
-      room.round = 2;
-      io.to(room.code).emit('goToTurnRevealScreen', room);
-    } 
-    else if (targetPhase === 'askContinue') {
+    if (targetPhase === 'askContinue') {
       room.continueVotes = {};
-      io.to(room.code).emit('promptContinueVote');
-    } 
-    else if (targetPhase === 'vote') {
-      room.votes = {};
-      io.to(room.code).emit('goToVoteScreen', room);
-    } 
-    else if (targetPhase === 'tiebreakerRound') {
-      room.tieBreakerActive = true;
-      room.round++;
-      io.to(room.code).emit('goToTurnRevealScreen', room);
+      io.to(roomCode).emit('promptContinueVote');
     }
   });
 
   socket.on('submitContinueChoice', ({ roomCode, choice }) => {
-    const room = rooms[roomCode.toUpperCase()];
+    const room = rooms[roomCode];
     if (!room) return;
 
     room.continueVotes[socket.id] = choice;
-    io.to(room.code).emit('continueStatusUpdated', room.continueVotes);
-
-    const allVoted = room.players.every(p => room.continueVotes[p.id]);
-    if (allVoted) {
-      let moreCount = 0;
-      let voteCount = 0;
-      Object.values(room.continueVotes).forEach(v => {
-        if (v === 'more') moreCount++;
-        if (v === 'vote') voteCount++;
-      });
-
-      if (moreCount >= voteCount) {
-        room.round++;
-        io.to(room.code).emit('goToTurnRevealScreen', room);
+    if (Object.keys(room.continueVotes).length === room.players.length) {
+      const moreVotes = Object.values(room.continueVotes).filter(v => v === 'more').length;
+      if (moreVotes > room.players.length / 2) {
+        room.round += 1;
+        room.answers[room.round] = {};
+        io.to(roomCode).emit('goToAnswerScreen', room);
+        handleNextTurnIndex(roomCode);
       } else {
-        room.votes = {};
-        io.to(room.code).emit('goToVoteScreen', room);
+        room.phase = 'vote';
+        io.to(roomCode).emit('goToVoteScreen', room);
       }
     }
   });
 
   socket.on('castVote', ({ roomCode, targetPlayerId }) => {
-    const room = rooms[roomCode.toUpperCase()];
+    const room = rooms[roomCode];
     if (!room) return;
 
-    room.votes[socket.id] = targetPlayerId;
-    io.to(room.code).emit('voteStatusUpdated', room.votes);
+    room.voteTally[targetPlayerId] = (room.voteTally[targetPlayerId] || 0) + 1;
+    io.to(roomCode).emit('voteStatusUpdated', { [socket.id]: true });
 
-    const allVoted = room.players.every(p => room.votes[p.id]);
-    if (allVoted) {
-      const voteTally = {};
-      room.players.forEach(p => voteTally[p.id] = 0);
-      
-      Object.values(room.votes).forEach(targetId => {
-        if (voteTally[targetId] !== undefined) voteTally[targetId]++;
+    const totalVotes = Object.values(room.voteTally).reduce((a, b) => a + b, 0);
+    if (totalVotes === room.players.length) {
+      const entries = Object.entries(room.voteTally);
+      let max = -1;
+      let winners = [];
+      entries.forEach(([id, qty]) => {
+        if (qty > max) { max = qty; winners = [id]; }
+        else if (qty === max) { winners.push(id); }
       });
 
-      let maxVotes = -1;
-      let highestVotedPlayers = [];
-
-      Object.entries(voteTally).forEach(([pId, count]) => {
-        if (count > maxVotes) {
-          maxVotes = count;
-          highestVotedPlayers = [pId];
-        } else if (count === maxVotes) {
-          highestVotedPlayers.push(pId);
-        }
-      });
-
-      room.voteTally = voteTally;
-
-      if (highestVotedPlayers.length > 1) {
-        room.tieBreakerActive = true;
-        room.gameOverReason = "It's a tie!";
-        io.to(room.code).emit('goToResultScreen', room);
+      room.phase = 'result';
+      if (winners.length > 1) {
+        room.gameOverReason = "⚠️ EMERGENCY TIE! Ballots deadlocked.";
       } else {
-        const exiledId = highestVotedPlayers[0];
-        room.tieBreakerActive = false;
-
-        if (room.roles[exiledId] === 'imposter') {
-          room.gameOverReason = "Crewmates Win! The Imposter was voted out.";
+        const targetId = winners[0];
+        const targetName = room.players.find(p => p.id === targetId)?.name || "Target";
+        if (room.roles[targetId] === 'imposter') {
+          room.gameOverReason = `🎉 CREWMATE VICTORY! The Imposter (${targetName}) was exiled. The secret target value was "${room.theNumber}".`;
         } else {
-          room.gameOverReason = "Imposter Wins! A crewmate was voted out.";
+          room.gameOverReason = `💥 IMPOSTER VICTORY! Innocent Crewmate (${targetName}) was exiled. The secret target value was "${room.theNumber}".`;
         }
-        io.to(room.code).emit('goToResultScreen', room);
       }
+      io.to(roomCode).emit('goToResultScreen', room);
     }
   });
 
   socket.on('imposterGuessNumber', ({ roomCode, guessedNumber }) => {
-    const room = rooms[roomCode.toUpperCase()];
+    const room = rooms[roomCode];
     if (!room) return;
-    if (room.roles[socket.id] !== 'imposter') return; 
 
-    room.tieBreakerActive = false;
-    const standardGuess = guessedNumber.trim().toUpperCase();
-    const standardSecret = String(room.theNumber).trim().toUpperCase();
-
-    if (standardGuess === standardSecret) {
-      room.gameOverReason = (room.gameMode === 'rj') ? "Imposter Wins! They guessed the secret word." : "Imposter Wins! They guessed the number.";
+    room.phase = 'result';
+    const isCorrect = String(guessedNumber).trim().toUpperCase() === String(room.theNumber).trim().toUpperCase();
+    if (isCorrect) {
+      room.gameOverReason = `💥 IMPOSTER VICTORY! The Imposter guessed the secret perfectly: "${room.theNumber}"!`;
     } else {
       room.failedImposterGuess = guessedNumber;
-      room.gameOverReason = "Crewmates Win! The Imposter guessed wrong.";
+      room.gameOverReason = `🎉 CREWMATE VICTORY! The Imposter guessed incorrectly ("${guessedNumber}"). The real element value was "${room.theNumber}".`;
     }
-    io.to(room.code).emit('goToResultScreen', room);
+    io.to(roomCode).emit('goToResultScreen', room);
+  });
+
+  /* SEVEN OF CLUBS ENGINE IMPLEMENTATION ROUTINES */
+  socket.on('sevenClubsPlayCard', ({ roomCode, rank, suit }) => {
+    const room = rooms[roomCode];
+    if (!room || room.phase !== 'sevenClubsBoard') return;
+
+    const activePlayer = room.players[room.currentTurnIndex];
+    if (activePlayer.id !== socket.id) return socket.emit('errorMsg', "It is not your turn!");
+
+    const hand = room.playerHands[socket.id] || [];
+    const cardIdx = hand.findIndex(c => c.rank === rank && c.suit === suit);
+    if (cardIdx === -1) return socket.emit('errorMsg', "Card elements not found in your inventory hand layout.");
+
+    const val = getCardNumericValue(rank);
+    const layout = room.boardLayout[suit];
+
+    let moveValid = false;
+    if (rank === '7') {
+      if (layout.min === null) {
+        layout.min = 7;
+        layout.max = 7;
+        moveValid = true;
+      }
+    } else {
+      if (layout.min !== null) {
+        if (val === layout.min - 1) {
+          layout.min = val;
+          moveValid = true;
+        } else if (val === layout.max + 1) {
+          layout.max = val;
+          moveValid = true;
+        }
+      }
+    }
+
+    if (!moveValid) return socket.emit('errorMsg', "Illegal move logic profile under current layout boundaries!");
+
+    // Execute move modifications safely
+    hand.splice(cardIdx, 1);
+
+    // Track finish conditions
+    if (hand.length === 0 && !room.standingsList.includes(activePlayer.name)) {
+      room.standingsList.push(activePlayer.name);
+    }
+
+    // Evaluate global game end
+    const dynamicPlayersWithCards = room.players.filter(p => room.playerHands[p.id].length > 0);
+    if (dynamicPlayersWithCards.length <= 1) {
+      dynamicPlayersWithCards.forEach(p => {
+        if (!room.standingsList.includes(p.name)) room.standingsList.push(p.name);
+      });
+      room.phase = 'result';
+      room.gameOverReason = `🎉 Seven of Clubs completed! Winner: ${room.standingsList[0] || 'Unknown'}`;
+      io.to(roomCode).emit('goToResultScreen', room);
+    } else {
+      // Find next player index loop
+      do {
+        room.currentTurnIndex = (room.currentTurnIndex + 1) % room.players.length;
+      } while (room.playerHands[room.players[room.currentTurnIndex].id].length === 0);
+
+      io.to(roomCode).emit('sevenClubsUpdateBoard', room);
+    }
+  });
+
+  socket.on('sevenClubsPassAction', ({ roomCode }) => {
+    const room = rooms[roomCode];
+    if (!room || room.phase !== 'sevenClubsBoard') return;
+
+    const activePlayer = room.players[room.currentTurnIndex];
+    if (activePlayer.id !== socket.id) return socket.emit('errorMsg', "It is not your turn!");
+
+    // Advance turn index natively if no valid moves are available
+    do {
+      room.currentTurnIndex = (room.currentTurnIndex + 1) % room.players.length;
+    } while (room.playerHands[room.players[room.currentTurnIndex].id].length === 0);
+
+    io.to(roomCode).emit('sevenClubsUpdateBoard', room);
   });
 
   socket.on('resetGame', ({ roomCode }) => {
-    const room = rooms[roomCode.toUpperCase()];
+    const room = rooms[roomCode];
     if (!room || room.hostId !== socket.id) return;
 
     room.phase = 'lobby';
@@ -412,37 +388,40 @@ io.on('connection', (socket) => {
     room.roles = {};
     room.theNumber = null;
     room.currentCategory = "";
-    room.readyPlayers = {};
-    room.currentTurnIndex = 0;
+    room.turnOrder = [];
     room.answers = {};
+    room.voteTally = {};
+    room.readyPlayers = {};
     room.continueVotes = {};
-    room.votes = {};
-    room.tieBreakerActive = false;
     room.failedImposterGuess = null;
     room.gameOverReason = "";
+    room.playerHands = {};
+    room.boardLayout = {
+      Clubs: { min: null, max: null },
+      Diamonds: { min: null, max: null },
+      Hearts: { min: null, max: null },
+      Spades: { min: null, max: null }
+    };
+    room.currentTurnIndex = 0;
+    room.standingsList = [];
 
-    io.to(room.code).emit('roomUpdated', room);
+    io.to(roomCode).emit('roomUpdated', room);
   });
 
   socket.on('disconnect', () => {
-    Object.keys(rooms).forEach(code => {
+    for (const code in rooms) {
       const room = rooms[code];
-      const index = room.players.findIndex(p => p.id === socket.id);
-      if (index !== -1) {
-        room.players.splice(index, 1);
-        if (room.players.length === 0) {
-          delete rooms[code]; 
-        } else {
-          if (room.hostId === socket.id) {
-            room.hostId = room.players[0].id;
-          }
-          io.to(code).emit('roomUpdated', room);
-        }
+      room.players = room.players.filter(p => p.id !== socket.id);
+      if (room.players.length === 0) {
+        delete rooms[code];
+      } else {
+        if (room.hostId === socket.id) room.hostId = room.players[0].id;
+        io.to(code).emit('roomUpdated', room);
       }
-    });
+    }
   });
 });
 
 server.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+  console.log(`Multi-mode network server running cleanly on port: ${PORT}`);
 });
